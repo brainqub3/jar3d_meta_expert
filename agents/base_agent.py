@@ -71,6 +71,10 @@ class BaseAgent(ABC, Generic[StateT]):
     def get_user_input(self) -> str:
         pass
 
+    @abstractmethod
+    def use_tool(self) -> Any:
+        pass
+
     def invoke(self, state: StateT, human_in_loop: bool = False, user_input: str = None) -> StateT:
         prompt = self.get_prompt(state)
         conversation_history = self.get_conv_history(state)
