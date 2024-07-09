@@ -15,6 +15,7 @@ class State(TypedDict):
     meta_prompt: Annotated[List[MessageDict], add_messages]
     conversation_history: Annotated[List[dict], add_messages]
     user_input: Annotated[List[str], add_messages]
+    router_decision: str
     chat_limit: int
     chat_finished: bool
 
@@ -22,6 +23,7 @@ state: State = {
     "meta_prompt": [],
     "conversation_history": [],
     "user_input": [],
+    "router_decision": None,
     "chat_limit": None,
     "chat_finished": False
 }
@@ -34,13 +36,11 @@ def chat_counter(state: State) -> State:
     state["chat_limit"] = chat_limit
     return state
 
-def router(state: State, limit) -> str:
-    chat_limit = state.get("chat_limit")
-    reursion_limit = limit.get("recursion_limit")
-    if chat_limit == reursion_limit:
-        return "end_chat"
+def routing_function(state: State) -> str:
+    if state["router_decision"]:
+        return "no_tool_expert"
     else:
-        return "professor_synapse"
+        return "tool_expert"
 
 def set_chat_finished(state: State) -> bool:
     state["chat_finished"] = True
@@ -205,7 +205,8 @@ class ToolExpert(BaseAgent[State]):
 
         user_input = state["meta_prompt"][-1].content
         state = self.invoke(state=state, user_input=user_input)
-        full_query = state["conversation_history"][-1].content
+        print( "FULL QUERY:", state["conversation_history"][-1])
+        full_query = state["conversation_history"][-1].get("content")
 
         refine_query = self.get_llm(json_model=True)
         refine_prompt = refine_query_template.format(manager_response=full_query)
@@ -215,7 +216,7 @@ class ToolExpert(BaseAgent[State]):
 
             ]
         refined_query = refine_query.invoke(input)
-        refined_query = refined_query["search_query"]
+        refined_query = json.loads(refined_query["search_query"])
         serper_response = self.use_tool(refined_query, "serper")
 
         best_url = self.get_llm(json_model=True)
@@ -226,10 +227,80 @@ class ToolExpert(BaseAgent[State]):
 
             ]
         best_url = best_url.invoke(input)
-        best_url = best_url["best_url"]
+        best_url = json.loads(best_url["best_url"])
         scraper_response = self.use_tool(best_url, "scraper")
 
         state = self.update_state("conversation_history", scraper_response, state)
+        
+        return state
+    
+class Router(BaseAgent[State]):
+    def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
+                 model_endpoint: str = None, stop: str = None):
+        super().__init__(model, server, temperature, model_endpoint, stop)
+        self.llm = self.get_llm(json_model=True)
+
+    def get_prompt(self, state) -> str:
+        print(f"\nn{state}\n")
+        system_prompt = state["meta_prompt"][-1].content
+        return system_prompt
+        
+    def process_response(self, response: Any, user_input: str = None) -> Dict[str, Union[str, dict]]:
+        updates_conversation_history = {
+            "router_decision": [
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": f"<Ex>{str(response)}</Ex>"}
+
+            ]
+        }
+        return updates_conversation_history
+    
+    def get_conv_history(self, state: State) -> str:
+        pass
+    
+    def get_user_input(self) -> str:
+        pass
+    
+    def get_guided_json(self, state: State) -> Dict[str, Any]:
+        pass
+
+    def use_tool(self, tool_input: str, mode: str) -> Any:
+        pass
+
+    def run(self, state: State) -> State:
+
+
+        router_template = """
+            Given these instructions from your manager.
+
+            # Response from Manager
+            {manager_response}
+
+            Return the following JSON.
+
+            ```json
+            {{""tool_agent: If the response from your manager suggest a tool will be neccessary, return True. Otherwise, return False.}}
+
+            Remember tool_agent is a **boolean** value.
+
+        """
+
+        system_prompt = router_template.format(manager_response=state["meta_prompt"][-1].content)
+        input = [
+                {"role": "user", "content": ""},
+                {"role": "assistant", "content": f"system_prompt:{system_prompt}"}
+
+            ]
+        router = self.get_llm(json_model=True)
+        router_response = router.invoke(input)
+        router_response = json.loads(router_response)
+        print(f"\n\n\nROUTER RESPONSE: {router_response}")
+        router_response = router_response.get("tool_agent")
+
+        if router_response in [False, "False", "false"]:
+            state = self.update_state("router_decision", False, state)
+        elif router_response in [True, "True", "true"]:
+            state = self.update_state("router_decision", True, state)
         
         return state
     
@@ -237,29 +308,43 @@ class ToolExpert(BaseAgent[State]):
 if __name__ == "__main__":
     from langgraph.graph import StateGraph
 
-    graph = StateGraph(State)
     agent_kwargs = {
         "model": "gpt-4o",
         "server": "openai",
         "temperature": 0,
     }
 
+    def routing_function(state: State) -> str:
+        router = Router(**agent_kwargs)
+        state = router.run(state=state)
+        if state["router_decision"]:
+            return "no_tool_expert"
+        else:
+            return "tool_expert"
+
+    graph = StateGraph(State)
+
     query = "Tell me a funny joke"
     input_dict = {"user_input": query}
 
-    graph.add_node("MetaExpert", lambda state: MetaExpert(**agent_kwargs).run(state=state, input_dict=input_dict))
-    graph.add_node("NoToolExpert", lambda state: NoToolExpert(**agent_kwargs).run(state=state))
+    graph.add_node("meta_expert", lambda state: MetaExpert(**agent_kwargs).run(state=state, input_dict=input_dict))
+    graph.add_node("no_tool_expert", lambda state: NoToolExpert(**agent_kwargs).run(state=state))
+    graph.add_node("tool_expert", lambda state: ToolExpert(**agent_kwargs).run(state=state))
     # graph.add_node("chat_counter", lambda state: chat_counter(state))
-    # graph.add_node("end_chat", lambda state: set_chat_finished(state))
+    graph.add_node("end_chat", lambda state: set_chat_finished(state))
 
-    graph.set_entry_point("MetaExpert")
-    graph.set_finish_point("NoToolExpert")
+    graph.set_entry_point("meta_expert")
+    graph.set_finish_point("end_chat")
 
-    graph.add_edge("MetaExpert", "NoToolExpert")
-    # graph.add_conditional_edges(
-    #     "chat_counter",
-    #     lambda state: router(state, limit),
-    # )
+
+    graph.add_edge("tool_expert", "end_chat")
+    graph.add_edge("no_tool_expert", "end_chat")
+    graph.add_conditional_edges(
+        "meta_expert",
+        lambda state: routing_function(state),
+    )
+
+
 
     workflow = graph.compile()
     limit = {"recursion_limit": 10}
