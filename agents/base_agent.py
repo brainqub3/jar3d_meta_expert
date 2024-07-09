@@ -71,14 +71,16 @@ class BaseAgent(ABC, Generic[StateT]):
     def get_user_input(self) -> str:
         pass
 
-    def invoke(self, state: StateT) -> StateT:
-        prompt = self.get_prompt()
+    def invoke(self, state: StateT, human_in_loop: bool = False, user_input: str = None) -> StateT:
+        prompt = self.get_prompt(state)
         conversation_history = self.get_conv_history(state)
-        user_input = self.get_user_input()
+
+        if human_in_loop:
+            user_input = self.get_user_input()
 
         messages = [
             {"role": "system", "content": f"{prompt}"},
-            {"role": "user", "content": f"**Conversation History**: {conversation_history} \n **User Response:** {user_input}"}
+            {"role": "user", "content": f"**Conversation History**: {conversation_history} \n <problem>{user_input}</problem>"}
         ]
 
         if self.server == 'vllm':
