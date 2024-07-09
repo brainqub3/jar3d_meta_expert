@@ -15,7 +15,7 @@ class State(TypedDict):
     meta_prompt: Annotated[List[MessageDict], add_messages]
     conversation_history: Annotated[List[dict], add_messages]
     user_input: Annotated[List[str], add_messages]
-    router_decision: str
+    router_decision: bool
     chat_limit: int
     chat_finished: bool
 
@@ -216,7 +216,9 @@ class ToolExpert(BaseAgent[State]):
 
             ]
         refined_query = refine_query.invoke(input)
-        refined_query = json.loads(refined_query["search_query"])
+        print(f"\n\n\n REFINED QUERY: {refined_query}")
+        refined_query_json = json.loads(refined_query)
+        refined_query = refined_query_json.get("search_query")
         serper_response = self.use_tool(refined_query, "serper")
 
         best_url = self.get_llm(json_model=True)
@@ -227,10 +229,16 @@ class ToolExpert(BaseAgent[State]):
 
             ]
         best_url = best_url.invoke(input)
-        best_url = json.loads(best_url["best_url"])
+        best_url_json = json.loads(best_url)
+        best_url = best_url_json.get("best_url" )
         scraper_response = self.use_tool(best_url, "scraper")
 
-        state = self.update_state("conversation_history", scraper_response, state)
+        input = {"scraper_response":[
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": f"system_prompt:{scraper_response}"}
+
+            ]}
+        state = self.update_state("scraper_response", input, state)
         
         return state
     
@@ -281,7 +289,7 @@ class Router(BaseAgent[State]):
             ```json
             {{""tool_agent: If the response from your manager suggest a tool will be neccessary, return True. Otherwise, return False.}}
 
-            Remember tool_agent is a **boolean** value.
+            Remember tool_agent is a **boolean** value, and tools are only neccessary to search the internet.
 
         """
 
@@ -294,15 +302,16 @@ class Router(BaseAgent[State]):
         router = self.get_llm(json_model=True)
         router_response = router.invoke(input)
         router_response = json.loads(router_response)
-        print(f"\n\n\nROUTER RESPONSE: {router_response}")
         router_response = router_response.get("tool_agent")
+        print(f"\n\n\nROUTER RESPONSE: {router_response}")
 
         if router_response in [False, "False", "false"]:
-            state = self.update_state("router_decision", False, state)
+            tool_agent = False
+
         elif router_response in [True, "True", "true"]:
-            state = self.update_state("router_decision", True, state)
+            tool_agent = True
         
-        return state
+        return tool_agent
     
 # Example usage
 if __name__ == "__main__":
@@ -316,21 +325,20 @@ if __name__ == "__main__":
 
     def routing_function(state: State) -> str:
         router = Router(**agent_kwargs)
-        state = router.run(state=state)
-        if state["router_decision"]:
+        tool_agent = router.run(state=state)
+        if tool_agent == False:
             return "no_tool_expert"
-        else:
+        elif tool_agent == True:
             return "tool_expert"
 
     graph = StateGraph(State)
 
-    query = "Tell me a funny joke"
+    query = "What's the current wather in London?"
     input_dict = {"user_input": query}
 
     graph.add_node("meta_expert", lambda state: MetaExpert(**agent_kwargs).run(state=state, input_dict=input_dict))
     graph.add_node("no_tool_expert", lambda state: NoToolExpert(**agent_kwargs).run(state=state))
     graph.add_node("tool_expert", lambda state: ToolExpert(**agent_kwargs).run(state=state))
-    # graph.add_node("chat_counter", lambda state: chat_counter(state))
     graph.add_node("end_chat", lambda state: set_chat_finished(state))
 
     graph.set_entry_point("meta_expert")
