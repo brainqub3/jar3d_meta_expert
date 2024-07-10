@@ -1,5 +1,7 @@
 import json
+import logging
 from termcolor import colored
+from datetime import datetime
 from typing import Any, Dict, Union, List
 from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages
@@ -7,6 +9,12 @@ from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
 from tools.basic_scraper import scrape_website
 from tools.google_serper import serper_search
+from utils.logging import log_function, setup_logging
+from utils.message_handling import get_ai_message_contents
+
+setup_logging(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 class MessageDict(TypedDict):
     role: str
@@ -61,6 +69,7 @@ class MetaExpert(BaseAgent[State]):
         return system_prompt
         
     def process_response(self, response: Any, user_input: str) -> Dict[str, List[MessageDict]]:
+        user_input = None
         updates_conversation_history = {
             "meta_prompt": [
                 {"role": "user", "content": f"{user_input}"},
@@ -70,8 +79,12 @@ class MetaExpert(BaseAgent[State]):
         }
         return updates_conversation_history
     
+    # @log_function(logger)
     def get_conv_history(self, state: State) -> str:
-        return state.get("conversation_history", [])
+        conversation_history = state.get("conversation_history", [])
+        expert_message_history = get_ai_message_contents(conversation_history)
+        expert_message_history = f"Expert Data Collected: <Ex>{expert_message_history}</Ex>"
+        return expert_message_history
     
     def get_user_input(self) -> str:
         user_input = input("Enter your query: ")
@@ -83,14 +96,11 @@ class MetaExpert(BaseAgent[State]):
     def use_tool(self) -> Any:
         pass
 
+    # @log_function(logger)
     def run(self, state: State) -> State:
 
         user_input = state.get("user_input")
-        state = self.update_state("user_input", user_input, state)
-
-        print(f"STATE BEFORE: {state}")
         state = self.invoke(state=state, user_input=user_input)
-        print(f"STATE AFTER: {state}")
         
         return state
     
@@ -110,7 +120,7 @@ class NoToolExpert(BaseAgent[State]):
         updates_conversation_history = {
             "conversation_history": [
                 {"role": "user", "content": user_input},
-                {"role": "assistant", "content": f"<Ex>{str(response)}</Ex>"}
+                {"role": "assistant", "content": f"{str(response)}"}
 
             ]
         }
@@ -128,15 +138,11 @@ class NoToolExpert(BaseAgent[State]):
     def use_tool(self) -> Any:
         pass
 
-    def run(self, state: State) -> State:
 
+    # @log_function(logger)
+    def run(self, state: State) -> State:
         user_input = state["meta_prompt"][1].content
-        
-        print(f"\n\nUSER INPUT: {user_input}")
-        print(f"STATE BEFORE: {state}")
-        state = self.invoke(state=state, user_input=user_input)
-        print(f"STATE AFTER: {state}")
-        
+        state = self.invoke(state=state, user_input=user_input)        
         return state
     
 
@@ -146,10 +152,7 @@ class ToolExpert(BaseAgent[State]):
         super().__init__(model, server, temperature, model_endpoint, stop)
         self.llm = self.get_llm(json_model=False)
 
-        print("\n\n\n TOOL EXPERT INITIALISED")
-
     def get_prompt(self, state) -> str:
-        # print(f"\nn{state}\n")
         system_prompt = state["meta_prompt"][-1].content
         return system_prompt
         
@@ -157,7 +160,7 @@ class ToolExpert(BaseAgent[State]):
         updates_conversation_history = {
             "conversation_history": [
                 {"role": "user", "content": user_input},
-                {"role": "assistant", "content": f"<Ex>{str(response)}</Ex>"}
+                {"role": "assistant", "content": f"{str(response)}"}
 
             ]
         }
@@ -180,9 +183,8 @@ class ToolExpert(BaseAgent[State]):
             results = scrape_website(tool_input)
             return results
 
+    # @log_function(logger)
     def run(self, state: State) -> State:
-
-        print("\n\nTool Expert Run Method Started")
 
         refine_query_template = """
             Given the response from your manager.
@@ -212,7 +214,6 @@ class ToolExpert(BaseAgent[State]):
 
         user_input = state["meta_prompt"][-1].content
         state = self.invoke(state=state, user_input=user_input)
-        # print( "FULL QUERY:", state["conversation_history"][-1])
         full_query = state["conversation_history"][-1].get("content")
 
         refine_query = self.get_llm(json_model=True)
@@ -223,7 +224,6 @@ class ToolExpert(BaseAgent[State]):
 
             ]
         refined_query = refine_query.invoke(input)
-        print(f"\n\n\n REFINED QUERY: {refined_query}")
         refined_query_json = json.loads(refined_query)
         refined_query = refined_query_json.get("search_query")
         serper_response = self.use_tool(refined_query, "serper")
@@ -239,17 +239,11 @@ class ToolExpert(BaseAgent[State]):
         best_url_json = json.loads(best_url)
         best_url = best_url_json.get("best_url" )
         scraper_response = self.use_tool(best_url, "scraper")
+        updates = self.process_response(scraper_response, user_input)
 
-        print(f"\n\n\nSCRAPER RESPONSE: {scraper_response}")
-
-        input = {"scraper_response":[
-                {"role": "user", "content": user_input},
-                {"role": "assistant", "content": f"system_prompt:{scraper_response}"}
-
-            ]}
-        
-        state = self.update_state("scraper_response", input, state)
-        
+        for key, value in updates.items():
+            state = self.update_state(key, value, state)
+                
         return state
     
 class Router(BaseAgent[State]):
@@ -259,7 +253,6 @@ class Router(BaseAgent[State]):
         self.llm = self.get_llm(json_model=True)
 
     def get_prompt(self, state) -> str:
-        # print(f"\nn{state}\n")
         system_prompt = state["meta_prompt"][-1].content
         return system_prompt
         
@@ -267,7 +260,7 @@ class Router(BaseAgent[State]):
         updates_conversation_history = {
             "router_decision": [
                 {"role": "user", "content": user_input},
-                {"role": "assistant", "content": f"<Ex>{str(response)}</Ex>"}
+                {"role": "assistant", "content": f"<Ex>{str(response)}</Ex> Todays date is {datetime.now()}"}
 
             ]
         }
@@ -285,6 +278,7 @@ class Router(BaseAgent[State]):
     def use_tool(self, tool_input: str, mode: str) -> Any:
         pass
 
+    @log_function(logger)
     def run(self, state: State) -> State:
 
         router_template = """
@@ -304,7 +298,6 @@ class Router(BaseAgent[State]):
             If your manager's response suggest they have provided a final answer, return "end_chat".
 
         """
-        print("ROUTER STATE", state["meta_prompt"][-1])
         system_prompt = router_template.format(manager_response=state["meta_prompt"][-1].content)
         input = [
                 {"role": "user", "content": ""},
@@ -315,9 +308,7 @@ class Router(BaseAgent[State]):
         router_response = router.invoke(input)
         router_response = json.loads(router_response)
         router_response = router_response.get("router_decision")
-        print(f"\n\n\nROUTER RESPONSE: {router_response}")
         state = self.update_state("router_decision", router_response, state)
-        print(f"\n\n\nROUTER UPDATED RESPONSE: {state}")
         
         return state
     
@@ -325,14 +316,17 @@ class Router(BaseAgent[State]):
 if __name__ == "__main__":
     from langgraph.graph import StateGraph
 
+    # agent_kwargs = {
+    #     "model": "claude-3-5-sonnet-20240620",
+    #     "server": "claude",
+    #     "temperature": 0.5
+    # }
+
     agent_kwargs = {
         "model": "gpt-4o",
         "server": "openai",
         "temperature": 0
     }
-
-    # def routing_function(state: State) -> str:
-    #     return state["router_decision"]
     
     def routing_function(state: State) -> str:
         decision = state["router_decision"]
@@ -364,8 +358,9 @@ if __name__ == "__main__":
         if query.lower() == "exit":
             break
 
+        # current_time = datetime.now()
         state["user_input"] = query
-        limit = {"recursion_limit": 70}
+        limit = {"recursion_limit": 10}
 
         for event in workflow.stream(state, limit):
             pass

@@ -7,25 +7,8 @@ from typing import List, Dict
 from utils.logging import log_function, setup_logging
 from config.load_configs import load_config
 
-setup_logging(level=logging.INFO)
+setup_logging(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-# def load_config(file_path):
-#     default_values = {
-#         'SERPER_API_KEY': 'default_serper_api_key',
-#         'OPENAI_API_KEY': 'default_openai_api_key',
-#         'CLAUDE_API_KEY': 'default_claude_api_key',
-#         'GEMINI_API_KEY': 'default_gemini_api_key',
-#         'GROQ_API_KEY': 'default_groq_api_key',
-#     }
-    
-#     with open(file_path, 'r') as file:
-#         config = yaml.safe_load(file)
-#         for key, value in config.items():
-#             if not value:
-#                 os.environ[key] = default_values.get(key, '')
-#             else:
-#                 os.environ[key] = value
 
 class ClaudeModel:
     def __init__(self, temperature: float, model: str, json_response: bool):
@@ -102,7 +85,7 @@ class GeminiModel:
         self.model = model
         self.json_response = json_response
     
-    @log_function(logger)
+    # @log_function(logger)
     def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
@@ -169,7 +152,7 @@ class GroqModel:
         self.model = model
         self.json_response = json_response
 
-    @log_function(logger)
+    # @log_function(logger)
     def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
@@ -222,7 +205,7 @@ class OllamaModel:
         self.model = model
         self.json_response = json_response
 
-    @log_function(logger)
+    # @log_function(logger)
     def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
@@ -267,7 +250,7 @@ class VllmModel:
         # self.guided_json = guided_json
         self.stop = stop
 
-    @log_function(logger)
+    # @log_function(logger)
     def invoke(self, messages: List[Dict[str, str]], guided_json: dict = None) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
@@ -341,7 +324,7 @@ class OpenAIModel:
         self.model = model
         self.json_response = json_response
 
-    @log_function(logger)
+    # @log_function(logger)
     def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]

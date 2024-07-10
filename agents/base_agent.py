@@ -41,7 +41,7 @@ class BaseAgent(ABC, Generic[StateT]):
         elif self.server == 'groq':
             return GroqModel(model=self.model, temperature=self.temperature, json_response=json_model)
         elif self.server == 'claude':
-            return ClaudeModel(self.model, temperature=self.temperature, json_response=json_model)
+            return ClaudeModel(temperature=self.temperature, model=self.model, json_response=json_model)
         elif self.server == 'gemini':
             return GeminiModel(self.model, temperature=self.temperature, json_response=json_model)
         else:
@@ -75,6 +75,7 @@ class BaseAgent(ABC, Generic[StateT]):
     def use_tool(self) -> Any:
         pass
 
+
     def invoke(self, state: StateT, human_in_loop: bool = False, user_input: str = None) -> StateT:
         prompt = self.get_prompt(state)
         conversation_history = self.get_conv_history(state)
@@ -83,8 +84,8 @@ class BaseAgent(ABC, Generic[StateT]):
             user_input = self.get_user_input()
 
         messages = [
-            {"role": "system", "content": f"{prompt}"},
-            {"role": "user", "content": f"**Conversation History**: {conversation_history} \n <problem>{user_input}</problem>"}
+            {"role": "system", "content": f"{prompt}\n memory:{conversation_history}"},
+            {"role": "user", "content": f"<problem>{user_input}</problem>"}
         ]
 
         if self.server == 'vllm':

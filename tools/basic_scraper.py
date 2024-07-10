@@ -15,7 +15,7 @@ def scrape_website(url: str) -> dict:
         content = ' '.join(texts)
         
         # Limit the content to 4000 characters
-        content = content[:4000]
+        content = content[:8000]
         
         # Return the result as a dictionary
         return {
