@@ -83,6 +83,7 @@ class MetaExpert(BaseAgent[State]):
     def get_conv_history(self, state: State) -> str:
         conversation_history = state.get("conversation_history", [])
         expert_message_history = get_ai_message_contents(conversation_history)
+        print(f"Expert Data Collected: {expert_message_history}")
         expert_message_history = f"Expert Data Collected: <Ex>{expert_message_history}</Ex>"
         return expert_message_history
     
@@ -278,7 +279,7 @@ class Router(BaseAgent[State]):
     def use_tool(self, tool_input: str, mode: str) -> Any:
         pass
 
-    @log_function(logger)
+    # @log_function(logger)
     def run(self, state: State) -> State:
 
         router_template = """
@@ -360,7 +361,7 @@ if __name__ == "__main__":
 
         # current_time = datetime.now()
         state["user_input"] = query
-        limit = {"recursion_limit": 10}
+        limit = {"recursion_limit": 30}
 
         for event in workflow.stream(state, limit):
             pass
