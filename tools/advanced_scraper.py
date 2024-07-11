@@ -12,7 +12,8 @@ def scraper(url: str, doc_type: str) -> dict:
             # Transform
             bs_transformer = BeautifulSoupTransformer()
             docs_transformed = bs_transformer.transform_documents(html, tags_to_extract=["p"])
-            return {"source":url, "content":docs_transformed[0].page_content}
+            # print({"source":url, "content":docs_transformed[0].page_content})
+            return {"source":url, "content": AIMessage(docs_transformed[0].page_content)}
         except Exception as e:
             return {"source": url, "content": f"Error scraping website: {str(e)}"}
     elif doc_type == "pdf":
@@ -41,4 +42,4 @@ def scraper(url: str, doc_type: str) -> dict:
 
 
 if __name__ == "__main__":
-    scraper("https://arxiv.org/pdf/2401.12954", "pdf")
+    scraper("https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/pdf/", "html")
