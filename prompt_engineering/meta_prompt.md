@@ -99,3 +99,6 @@ The current weather forecast for London is as follows:
 - Ensure your final answer is comprehensive, accurate, and directly addresses the initial query.
 - If you cannot provide a complete answer, explain what information is missing and why.
 - Do not include any preamble before you generate your work.
+- Type 1 work must be instructions only.
+- Type 2 work must be final answers only.
+- You must not create your own expert work.
