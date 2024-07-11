@@ -351,58 +351,59 @@ if __name__ == "__main__":
     # agent_kwargs = {
     #     "model": "claude-3-5-sonnet-20240620",
     #     "server": "claude",
-    #     "temperature": 0
+    #     "temperature": 0.5
     # }
 
     # For OpenAI
     agent_kwargs = {
         "model": "gpt-4o",
         "server": "openai",
-        "temperature": 0
+        "temperature": 0.5
     }
 
     # Ollama
     # agent_kwargs = {
     #     "model": "phi3:instruct",
     #     "server": "ollama",
-    #     "temperature": 0
+    #     "temperature": 0.5
     # }
 
     # Groq
     # agent_kwargs = {
     #     "model": "mixtral-8x7b-32768",
     #     "server": "groq",
-    #     "temperature": 0
+    #     "temperature": 0.5
     # }
 
     # # Gemnin
     # agent_kwargs = {
-    #     "model": "gpt-4o",
-    #     "server": "openai",
-    #     "temperature": 0
+    #     "model": "",
+    #     "server": "gemini",
+    #     "temperature": 0.5
     # }
 
     # # Vllm
     # agent_kwargs = {
     #     "model": "meta-llama/Meta-Llama-3-70B-Instruct",
     #     "server": "vllm",
-    #     "temperature": 0,
+    #     "temperature": 0.5,
     #     "model_endpoint": "https://vpzatdgopr2pmx-8000.proxy.runpod.net/",
     # }
+
+    tools_router_agent_kwargs = agent_kwargs.copy()
+    tools_router_agent_kwargs["temperature"] = 0
 
     def routing_function(state: State) -> str:
         decision = state["router_decision"]
         print(colored(f"\n\n Routing function called. Decision: {decision}", 'red'))
-        # colored(print(f"\n\n Routing function called. Decision: {decision}", )
-        # colored(print(f"\n\n Routing function called. Decision: {decision}")
         return decision
 
     graph = StateGraph(State)
 
     graph.add_node("meta_expert", lambda state: MetaExpert(**agent_kwargs).run(state=state))
-    graph.add_node("router", lambda state: Router(**agent_kwargs).run(state=state))
+    graph.add_node("router", lambda state: Router(**tools_router_agent_kwargs).run(state=state))
     graph.add_node("no_tool_expert", lambda state: NoToolExpert(**agent_kwargs).run(state=state))
-    graph.add_node("tool_expert", lambda state: ToolExpert(**agent_kwargs).run(state=state))
+    graph.add_node("tool_expert", lambda state: ToolExpert(**tools_router_agent_kwargs).run(state=state))
     graph.add_node("end_chat", lambda state: set_chat_finished(state))
 
     graph.set_entry_point("meta_expert")

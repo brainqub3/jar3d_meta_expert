@@ -19,7 +19,7 @@ def scraper(url: str, doc_type: str) -> dict:
             print({"source":url, "content": AIMessage(docs_transformed[0].page_content)})
             return {"source":url, "content": AIMessage(docs_transformed[0].page_content)}
         except Exception as e:
-            return {"source": url, "content": f"Error scraping website: {str(e)}"}
+            return {"source": url, "content": AIMessage(f"Error scraping website: {str(e)}")}
     elif doc_type == "pdf":
         try:
             loader = PyPDFLoader(url)
