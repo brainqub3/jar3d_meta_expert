@@ -1,6 +1,7 @@
 from langchain_community.document_loaders import AsyncChromiumLoader
 from langchain_community.document_transformers import BeautifulSoupTransformer
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_core.messages import AIMessage
 
 
 def scraper(url: str, doc_type: str) -> dict:
@@ -18,7 +19,8 @@ def scraper(url: str, doc_type: str) -> dict:
         try:
             loader = PyPDFLoader(url)
             pages = loader.load_and_split()
-            return {"source":url, "content":pages}
+            # print({"source":url, "content":AIMessage(pages)})
+            return {"source":url, "content":AIMessage(pages)}
         except Exception as e:
             return {"source": url, "content": f"Error scraping PDF: {str(e)}"}
     else:
@@ -39,4 +41,4 @@ def scraper(url: str, doc_type: str) -> dict:
 
 
 if __name__ == "__main__":
-    scraper("https://arxiv.org/pdf/2401.12954")
+    scraper("https://arxiv.org/pdf/2401.12954", "pdf")
