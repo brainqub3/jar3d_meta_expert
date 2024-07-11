@@ -1,0 +1,10 @@
+langchain-core==0.2.4
+langgraph==0.0.64
+langchain-community==0.2.3
+langchain-openai==0.1.8
+beautifulsoup4==4.12.3
+termcolor==2.4.0
+chainlit==1.1.202
+colorlog==6.8.2
+fake-useragent==1.5.1
+playwright==1.45.0

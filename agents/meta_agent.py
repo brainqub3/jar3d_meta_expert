@@ -7,14 +7,14 @@ from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages
 from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
-from tools.basic_scraper import scrape_website
+from tools.basic_scraper import AdvancedWebScraper
 from tools.google_serper import serper_search
 from utils.logging import log_function, setup_logging
 from utils.message_handling import get_ai_message_contents
+from prompt_engineering.guided_json_lib import guided_json_search_query, guided_json_best_url, guided_json_router_decision
 
-setup_logging(level=logging.DEBUG)
+setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 class MessageDict(TypedDict):
     role: str
@@ -79,7 +79,7 @@ class MetaExpert(BaseAgent[State]):
         }
         return updates_conversation_history
     
-    # @log_function(logger)
+    @log_function(logger)
     def get_conv_history(self, state: State) -> str:
         conversation_history = state.get("conversation_history", [])
         expert_message_history = get_ai_message_contents(conversation_history)
@@ -97,7 +97,7 @@ class MetaExpert(BaseAgent[State]):
     def use_tool(self) -> Any:
         pass
 
-    # @log_function(logger)
+    @log_function(logger)
     def run(self, state: State) -> State:
 
         user_input = state.get("user_input")
@@ -181,7 +181,8 @@ class ToolExpert(BaseAgent[State]):
             results = serper_search(tool_input)
             return results
         elif mode == "scraper":
-            results = scrape_website(tool_input)
+            scraper = AdvancedWebScraper()
+            results = scraper.scrape_website(tool_input)
             return results
 
     # @log_function(logger)
@@ -193,14 +194,15 @@ class ToolExpert(BaseAgent[State]):
             # Response from Manager
             {manager_response}
 
-            ```json
+            **Return the following JSON:**
+
+
             {{"search_query": The refined google search engine query that aligns with the response from your managers.}}
 
         """
 
         best_url_template = """
             Given the serper results, and the instructions from your manager. Select the best URL
-            Return the following JSON:
 
             # Manger Instructions
             {manager_response}
@@ -208,7 +210,9 @@ class ToolExpert(BaseAgent[State]):
             # Serper Results
             {serper_results}
 
-            ```json
+            **Return the following JSON:**
+
+
             {{"best_url": The URL of the serper results that aligns most with the instructions from your manager.}}
 
         """
@@ -224,7 +228,13 @@ class ToolExpert(BaseAgent[State]):
                 {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
 
             ]
-        refined_query = refine_query.invoke(input)
+        
+        if self.server == 'vllm':
+            guided_json = guided_json_search_query
+            refined_query = refine_query.invoke(input, guided_json)
+        else:
+            refined_query = refine_query.invoke(input)
+
         refined_query_json = json.loads(refined_query)
         refined_query = refined_query_json.get("search_query")
         serper_response = self.use_tool(refined_query, "serper")
@@ -236,7 +246,13 @@ class ToolExpert(BaseAgent[State]):
                 {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
 
             ]
-        best_url = best_url.invoke(input)
+        
+        if self.server == 'vllm':
+            guided_json = guided_json_best_url
+            best_url = best_url.invoke(input, guided_json)
+        else:
+            best_url = best_url.invoke(input)
+
         best_url_json = json.loads(best_url)
         best_url = best_url_json.get("best_url" )
         scraper_response = self.use_tool(best_url, "scraper")
@@ -288,9 +304,8 @@ class Router(BaseAgent[State]):
             # Response from Manager
             {manager_response}
 
-            Return the following JSON.
+            **Return the following JSON:**
 
-            ```json
             {{""router_decision: Return the next agent to pass control to.}}
 
             **strictly** adhere to these **guidelines** for routing.
@@ -306,7 +321,13 @@ class Router(BaseAgent[State]):
 
             ]
         router = self.get_llm(json_model=True)
-        router_response = router.invoke(input)
+
+        if self.server == 'vllm':
+            guided_json = guided_json_router_decision
+            router_response = router.invoke(input, guided_json)
+        else:
+            router_response = router.invoke(input)
+
         router_response = json.loads(router_response)
         router_response = router_response.get("router_decision")
         state = self.update_state("router_decision", router_response, state)
@@ -317,21 +338,53 @@ class Router(BaseAgent[State]):
 if __name__ == "__main__":
     from langgraph.graph import StateGraph
 
+
+    # For Claude
     # agent_kwargs = {
     #     "model": "claude-3-5-sonnet-20240620",
     #     "server": "claude",
-    #     "temperature": 0.5
+    #     "temperature": 0
     # }
 
+    # For OpenAI
     agent_kwargs = {
         "model": "gpt-4o",
         "server": "openai",
         "temperature": 0
     }
-    
+
+    # Ollama
+    # agent_kwargs = {
+    #     "model": "phi3:instruct",
+    #     "server": "ollama",
+    #     "temperature": 0
+    # }
+
+    # Groq
+    # agent_kwargs = {
+    #     "model": "mixtral-8x7b-32768",
+    #     "server": "groq",
+    #     "temperature": 0
+    # }
+
+    # # Gemnin
+    # agent_kwargs = {
+    #     "model": "gpt-4o",
+    #     "server": "openai",
+    #     "temperature": 0
+    # }
+
+    # # Vllm
+    # agent_kwargs = {
+    #     "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+    #     "server": "vllm",
+    #     "temperature": 0,
+    #     "model_endpoint": "https://vpzatdgopr2pmx-8000.proxy.runpod.net/",
+    # }
+
     def routing_function(state: State) -> str:
         decision = state["router_decision"]
-        print(f"Routing function called. Decision: {decision}")
+        print(f"\n\n Routing function called. Decision: {decision}")
         return decision
 
     graph = StateGraph(State)

@@ -1,4 +1,5 @@
 import requests
+import time
 import yaml
 import json
 import os
@@ -53,7 +54,7 @@ class ClaudeModel:
                 data=json.dumps(payload)
             )
             
-            print("REQUEST RESPONSE", request_response.status_code)
+            # print("REQUEST RESPONSE", request_response.status_code)
             request_response_json = request_response.json()
 
             if 'content' not in request_response_json or not request_response_json['content']:
@@ -119,7 +120,7 @@ class GeminiModel:
                 data=json.dumps(payload)
             )
             
-            print("REQUEST RESPONSE", request_response.status_code)
+            # print("REQUEST RESPONSE", request_response.status_code)
             request_response_json = request_response.json()
 
             if 'candidates' not in request_response_json or not request_response_json['candidates']:
@@ -168,6 +169,8 @@ class GroqModel:
             "temperature": self.temperature,
         }
 
+        time.sleep(5)
+
         if self.json_response:
             payload["response_format"] = {"type": "json_object"}
 
@@ -178,7 +181,7 @@ class GroqModel:
                 data=json.dumps(payload)
             )
             
-            print("REQUEST RESPONSE", request_response.status_code)
+            # print("REQUEST RESPONSE", request_response.status_code)
             request_response_json = request_response.json()
             
             if 'choices' not in request_response_json or len(request_response_json['choices']) == 0:
@@ -228,7 +231,7 @@ class OllamaModel:
                 data=json.dumps(payload)
             )
             
-            print("REQUEST RESPONSE", request_response)
+            # print("REQUEST RESPONSE", request_response)
             request_response_json = request_response.json()
             
             if self.json_response:
@@ -297,7 +300,7 @@ class VllmModel:
                 data=json.dumps(payload)
             )
             
-            print("REQUEST RESPONSE", request_response)
+            # print("REQUEST RESPONSE", request_response)
             request_response_json = request_response.json()
             response_content = request_response_json['choices'][0]['message']['content']
             
@@ -350,6 +353,7 @@ class OpenAIModel:
         
         try:
             response_dict = requests.post(self.model_endpoint, headers=self.headers, data=json.dumps(payload))
+            # print("\n\nRESPONSE", response_dict)
             response_json = response_dict.json()
 
             if self.json_response:
