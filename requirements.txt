@@ -8,3 +8,5 @@ chainlit==1.1.202
 colorlog==6.8.2
 fake-useragent==1.5.1
 playwright==1.45.0
+pypdf==4.2.0
+

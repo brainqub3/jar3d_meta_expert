@@ -15,10 +15,15 @@ guided_json_best_url = {
     "best_url": {
       "type": "string",
       "description": "The URL of the Serper results that aligns most with the instructions from your manager."
+    },
+    "pdf": {
+      "type": "boolean",
+      "description": "A boolean value indicating whether the URL is a PDF or not. This should be True if the URL is a PDF, and False otherwise."
     }
   },
-  "required": ["best_url"]
+  "required": ["best_url", "pdf"]
 }
+
 
 
 guided_json_router_decision = {

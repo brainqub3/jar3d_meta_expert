@@ -7,7 +7,7 @@ from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages
 from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
-from tools.basic_scraper import AdvancedWebScraper
+from tools.advanced_scraper import scraper
 from tools.google_serper import serper_search
 from utils.logging import log_function, setup_logging
 from utils.message_handling import get_ai_message_contents
@@ -54,7 +54,7 @@ def routing_function(state: State) -> str:
 def set_chat_finished(state: State) -> bool:
     state["chat_finished"] = True
     final_response = state["meta_prompt"][-1].content
-    print(colored(f"Meta Agent 🧙‍♂️: {final_response}", 'cyan'))
+    print(colored(f"\n\n Meta Agent 🧙‍♂️: {final_response}", 'cyan'))
 
     return state
 
@@ -176,13 +176,12 @@ class ToolExpert(BaseAgent[State]):
     def get_guided_json(self, state: State) -> Dict[str, Any]:
         pass
 
-    def use_tool(self, tool_input: str, mode: str) -> Any:
+    def use_tool(self, mode: str, tool_input: str, doc_type: str = None) -> Any:
         if mode == "serper":
             results = serper_search(tool_input)
             return results
         elif mode == "scraper":
-            scraper = AdvancedWebScraper()
-            results = scraper.scrape_website(tool_input)
+            results = scraper(tool_input, doc_type)
             return results
 
     # @log_function(logger)
@@ -213,7 +212,8 @@ class ToolExpert(BaseAgent[State]):
             **Return the following JSON:**
 
 
-            {{"best_url": The URL of the serper results that aligns most with the instructions from your manager.}}
+            {{"best_url": The URL of the serper results that aligns most with the instructions from your manager.,
+            "pdf": A boolean value indicating whether the URL is a PDF or not. This should be True if the URL is a PDF, and False otherwise.}}
 
         """
 
@@ -237,7 +237,7 @@ class ToolExpert(BaseAgent[State]):
 
         refined_query_json = json.loads(refined_query)
         refined_query = refined_query_json.get("search_query")
-        serper_response = self.use_tool(refined_query, "serper")
+        serper_response = self.use_tool("serper", refined_query)
 
         best_url = self.get_llm(json_model=True)
         best_url_prompt = best_url_template.format(manager_response=full_query, serper_results=serper_response)
@@ -254,8 +254,16 @@ class ToolExpert(BaseAgent[State]):
             best_url = best_url.invoke(input)
 
         best_url_json = json.loads(best_url)
-        best_url = best_url_json.get("best_url" )
-        scraper_response = self.use_tool(best_url, "scraper")
+        best_url = best_url_json.get("best_url")
+
+        doc_type = best_url_json.get("pdf")
+
+        if doc_type == "True" or doc_type == True:
+            doc_type = "pdf"
+        else:
+            doc_type = "html"
+
+        scraper_response = self.use_tool("scraper", best_url, doc_type)
         updates = self.process_response(scraper_response, user_input)
 
         for key, value in updates.items():
@@ -384,7 +392,9 @@ if __name__ == "__main__":
 
     def routing_function(state: State) -> str:
         decision = state["router_decision"]
-        print(f"\n\n Routing function called. Decision: {decision}")
+        print(colored(f"\n\n Routing function called. Decision: {decision}", 'red'))
+        # colored(print(f"\n\n Routing function called. Decision: {decision}", )
+        # colored(print(f"\n\n Routing function called. Decision: {decision}")
         return decision
 
     graph = StateGraph(State)
