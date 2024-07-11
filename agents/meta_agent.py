@@ -13,7 +13,7 @@ from utils.logging import log_function, setup_logging
 from utils.message_handling import get_ai_message_contents
 from prompt_engineering.guided_json_lib import guided_json_search_query, guided_json_best_url, guided_json_router_decision
 
-setup_logging(level=logging.INFO)
+setup_logging(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class MessageDict(TypedDict):
@@ -375,9 +375,9 @@ if __name__ == "__main__":
     #     "temperature": 0.5
     # }
 
-    # # Gemnin
+    # # Gemnin - Not currently working, I will be debugging this soon.
     # agent_kwargs = {
-    #     "model": "",
+    #     "model": "gemini-1.5-pro",
     #     "server": "gemini",
     #     "temperature": 0.5
     # }

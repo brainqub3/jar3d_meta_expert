@@ -26,7 +26,7 @@ class ClaudeModel:
         self.model = model
         self.json_response = json_response
 
-    @log_function(logger)
+    # @log_function(logger)
     def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
@@ -88,6 +88,7 @@ class GeminiModel:
     
     # @log_function(logger)
     def invoke(self, messages: List[Dict[str, str]]) -> str:
+        time.sleep(5)
         system = messages[0]["content"]
         user = messages[1]["content"]
 

@@ -43,7 +43,7 @@ class BaseAgent(ABC, Generic[StateT]):
         elif self.server == 'claude':
             return ClaudeModel(temperature=self.temperature, model=self.model, json_response=json_model)
         elif self.server == 'gemini':
-            return GeminiModel(self.model, temperature=self.temperature, json_response=json_model)
+            return GeminiModel(temperature=self.temperature, model=self.model,  json_response=json_model)
         else:
             raise ValueError(f"Unsupported server: {self.server}")
 
