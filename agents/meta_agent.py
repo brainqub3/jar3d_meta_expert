@@ -348,18 +348,18 @@ if __name__ == "__main__":
 
 
     # For Claude
-    # agent_kwargs = {
-    #     "model": "claude-3-5-sonnet-20240620",
-    #     "server": "claude",
-    #     "temperature": 0.5
-    # }
-
-    # For OpenAI
     agent_kwargs = {
-        "model": "gpt-4o",
-        "server": "openai",
+        "model": "claude-3-5-sonnet-20240620",
+        "server": "claude",
         "temperature": 0.5
     }
+
+    # For OpenAI
+    # agent_kwargs = {
+    #     "model": "gpt-4o",
+    #     "server": "openai",
+    #     "temperature": 0.5
+    # }
 
     # Ollama
     # agent_kwargs = {
