@@ -1,8 +1,8 @@
 # Meta Expert
-A project for versatile AI agents that can run with proprietary models or completely open-source. The meta expert has two agents a basic [Meta Agent](Docs/Meta-Prompting%20Overview.MD) , and [Jar3d](Docs/Introduction%to%Jar3d) a more sophisticated and versatile agent.
+A project for versatile AI agents that can run with proprietary models or completely open-source. The meta expert has two agents: a basic [Meta Agent](Docs/Meta-Prompting%20Overview.MD), and [Jar3d](Docs/Introduction%20to%20Jar3d.MD), a more sophisticated and versatile agent.
 
 ## Table of Contents
-1. [Core Concepts](#introduction)
+1. [Core Concepts](#core-concepts)
 2. [Prerequisites](#prerequisites)
    - [Environment Setup](#environment-setup)
 3. [Repository Setup](#repository-setup)
@@ -11,12 +11,13 @@ A project for versatile AI agents that can run with proprietary models or comple
 6. [Jar3d Setup](#setup-for-jar3d)
    - [Setting up the NLM-Ingestor Server](#1-setting-up-the-nlm-ingestor-server)
 7. [Working with Ollama](#if-you-want-to-work-with-ollama)
+8. [On the Roadmap for Jar3d](#on-the-roadmap-for-jar3d)
 
 ## Core Concepts
-This project leverages three core concepts
-1. Meta prompting: For more information, refer to the paper on **Meta-Prompting** ([source](https://arxiv.black/pdf/2401.12954)). Read our notes on [Meta-Prompt](Docs/Meta-Prompting%20Overview.MD) for a more concise overview.
-2. Chain of Reasoning: For the [Jar3d](#setup-for-jar3d), we also leverage an adaptation of [Chain-of-Reasoning](https://github.com/ProfSynapse/Synapse_CoR) 
-3. [Jar3d](#setup-for-jar3d) uses retrieval augmented generation, this isn't used within the [Basic Meta Agent](#setup-for-basic-meta-agent). Read our notes on [Agentic RAG](Docs/Overview%of%Agentic%RAG).
+This project leverages three core concepts:
+1. Meta prompting: For more information, refer to the paper on **Meta-Prompting** ([source](https://arxiv.black/pdf/2401.12954)). Read our notes on [Meta-Prompting Overview](Docs/Meta-Prompting%20Overview.MD) for a more concise overview.
+2. Chain of Reasoning: For [Jar3d](#setup-for-jar3d), we also leverage an adaptation of [Chain-of-Reasoning](https://github.com/ProfSynapse/Synapse_CoR) 
+3. [Jar3d](#setup-for-jar3d) uses retrieval augmented generation, which isn't used within the [Basic Meta Agent](#setup-for-basic-meta-agent). Read our notes on [Overview of Agentic RAG](Docs/Overview%20of%20Agentic%20RAG.MD).
 
 ## Prerequisites
 
@@ -76,7 +77,7 @@ Then enter your query.
 Jar3d is a more sophisticated agent that uses RAG, Chain-of-Reasoning, and Meta-Prompting to complete long-running research tasks. 
 
 Try Jar3d with:
-- Writing a newsletter - [Example](Docs/Example Outputs/Llama%3.1%Newsletter.MD)
+- Writing a newsletter - [Example](Docs/Example%20Outputs/Llama%203.1%20Newsletter.MD)
 - Writing a literature review
 - As a holiday assistant
 
