@@ -27,6 +27,7 @@ class State(TypedDict):
     router_decision: bool
     chat_limit: int
     chat_finished: bool
+    recursion_limit: int
 
 state: State = {
     "meta_prompt": [],
@@ -34,16 +35,42 @@ state: State = {
     "user_input": [],
     "router_decision": None,
     "chat_limit": None,
-    "chat_finished": False
+    "chat_finished": False,
+    "recursion_limit": None
 }
 
-def chat_counter(state: State) -> State:
-    chat_limit = state.get("chat_limit")
-    if chat_limit is None:
-        chat_limit = 0
-    chat_limit += 1
-    state["chat_limit"] = chat_limit
-    return state
+# class State(TypedDict):
+#     meta_prompt: Annotated[List[MessageDict], add_messages]
+#     conversation_history: Annotated[List[dict], add_messages]
+#     user_input: Annotated[List[str], add_messages]
+#     router_decision: bool
+#     chat_limit: int
+#     chat_finished: bool
+
+# state: State = {
+#     "meta_prompt": [],
+#     "conversation_history": [],
+#     "user_input": [],
+#     "router_decision": None,
+#     "chat_limit": None,
+#     "chat_finished": False
+# }
+
+# def chat_counter(state: State) -> State:
+#     chat_limit = state.get("chat_limit")
+#     if chat_limit is None:
+#         chat_limit = 0
+#     chat_limit += 1
+#     state["chat_limit"] = chat_limit
+#     return state
+
+# def chat_counter(state: State) -> State:
+#     chat_limit = state.get("chat_limit")
+#     if chat_limit is None:
+#         chat_limit = 0
+#     chat_limit += 1
+#     state["chat_limit"] = chat_limit
+#     return chat_limit
 
 def routing_function(state: State) -> str:
     if state["router_decision"]:
@@ -68,7 +95,7 @@ class MetaExpert(BaseAgent[State]):
         system_prompt = read_markdown_file('prompt_engineering/meta_prompt.md')
         return system_prompt
         
-    def process_response(self, response: Any, user_input: str) -> Dict[str, List[MessageDict]]:
+    def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, List[MessageDict]]:
         user_input = None
         updates_conversation_history = {
             "meta_prompt": [
@@ -100,6 +127,7 @@ class MetaExpert(BaseAgent[State]):
     @log_function(logger)
     def run(self, state: State) -> State:
 
+        # counter = chat_counter(state)
         user_input = state.get("user_input")
         state = self.invoke(state=state, user_input=user_input)
         
@@ -117,7 +145,7 @@ class NoToolExpert(BaseAgent[State]):
         system_prompt = state["meta_prompt"][-1].content
         return system_prompt
         
-    def process_response(self, response: Any, user_input: str = None) -> Dict[str, Union[str, dict]]:
+    def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
         updates_conversation_history = {
             "conversation_history": [
                 {"role": "user", "content": user_input},
@@ -142,6 +170,7 @@ class NoToolExpert(BaseAgent[State]):
 
     # @log_function(logger)
     def run(self, state: State) -> State:
+        # chat_counter(state)
         user_input = state["meta_prompt"][1].content
         state = self.invoke(state=state, user_input=user_input)        
         return state
@@ -157,7 +186,7 @@ class ToolExpert(BaseAgent[State]):
         system_prompt = state["meta_prompt"][-1].content
         return system_prompt
         
-    def process_response(self, response: Any, user_input: str = None) -> Dict[str, Union[str, dict]]:
+    def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
         updates_conversation_history = {
             "conversation_history": [
                 {"role": "user", "content": user_input},
@@ -186,6 +215,8 @@ class ToolExpert(BaseAgent[State]):
 
     # @log_function(logger)
     def run(self, state: State) -> State:
+
+        # counter = chat_counter(state)
 
         refine_query_template = """
             Given the response from your manager.
@@ -281,7 +312,7 @@ class Router(BaseAgent[State]):
         system_prompt = state["meta_prompt"][-1].content
         return system_prompt
         
-    def process_response(self, response: Any, user_input: str = None) -> Dict[str, Union[str, dict]]:
+    def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
         updates_conversation_history = {
             "router_decision": [
                 {"role": "user", "content": user_input},
@@ -306,6 +337,24 @@ class Router(BaseAgent[State]):
     # @log_function(logger)
     def run(self, state: State) -> State:
 
+        # router_template = """
+        #     Given these instructions from your manager.
+
+        #     # Response from Manager
+        #     {manager_response}
+
+        #     **Return the following JSON:**
+
+        #     {{""router_decision: Return the next agent to pass control to.}}
+
+        #     **strictly** adhere to these **guidelines** for routing.
+        #     If your manager's response suggests a tool might be required to answer the query, return "tool_expert".
+        #     If your manager's response suggests no tool is required to answer the query, return "no_tool_expert".
+        #     If your manager's response suggest they have provided a final answer, return "end_chat".
+
+        # """
+
+        # chat_counter(state)
         router_template = """
             Given these instructions from your manager.
 
@@ -317,8 +366,8 @@ class Router(BaseAgent[State]):
             {{""router_decision: Return the next agent to pass control to.}}
 
             **strictly** adhere to these **guidelines** for routing.
-            If your manager's response suggests a tool might be required to answer the query, return "tool_expert".
-            If your manager's response suggests no tool is required to answer the query, return "no_tool_expert".
+            If your manager's response suggests the Expert Internet Researcher or the suggests the internet might be required, return "tool_expert".
+            If your manager's response suggests that the internet is not required, return "no_tool_expert".
             If your manager's response suggest they have provided a final answer, return "end_chat".
 
         """
@@ -358,7 +407,7 @@ if __name__ == "__main__":
     # agent_kwargs = {
     #     "model": "gpt-4o",
     #     "server": "openai",
-    #     "temperature": 0.5
+    #     "temperature": 0.1
     # }
 
     # Ollama
@@ -424,8 +473,10 @@ if __name__ == "__main__":
             break
 
         # current_time = datetime.now()
+        recursion_limit = 40
+        state["recursion_limit"] = recursion_limit
         state["user_input"] = query
-        limit = {"recursion_limit": 30}
+        limit = {"recursion_limit": recursion_limit}
 
         for event in workflow.stream(state, limit):
             pass

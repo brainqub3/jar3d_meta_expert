@@ -2,14 +2,15 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Union, TypeVar, Generic
 from typing_extensions import TypedDict
-
+from datetime import datetime
+from termcolor import colored
 from models.llms import (
     OllamaModel,
     OpenAIModel,
     GroqModel,
     GeminiModel,
     ClaudeModel,
-    VllmModel
+    VllmModel,
 )
 
 # Set up logging
@@ -44,7 +45,6 @@ class BaseAgent(ABC, Generic[StateT]):
             return ClaudeModel(temperature=self.temperature, model=self.model, json_response=json_model)
         elif self.server == 'gemini':
             return GeminiModel(temperature=self.temperature, model=self.model,  json_response=json_model)
-        else:
             raise ValueError(f"Unsupported server: {self.server}")
 
     @abstractmethod
@@ -60,7 +60,7 @@ class BaseAgent(ABC, Generic[StateT]):
         return state
 
     @abstractmethod
-    def process_response(self, response: Any, user_input: str = None) -> Dict[str, Union[str, dict]]:
+    def process_response(self, response: Any, user_input: str = None, state: StateT = None) -> Dict[str, Union[str, dict]]:
         pass
 
     @abstractmethod
@@ -76,16 +76,19 @@ class BaseAgent(ABC, Generic[StateT]):
         pass
 
 
-    def invoke(self, state: StateT, human_in_loop: bool = False, user_input: str = None) -> StateT:
+    def invoke(self, state: StateT = None, human_in_loop: bool = False, user_input: str = None, final_answer: str = None) -> StateT:
         prompt = self.get_prompt(state)
         conversation_history = self.get_conv_history(state)
+
+        if final_answer:
+            print(colored(f"\n\n{final_answer}\n\n", "green"))
 
         if human_in_loop:
             user_input = self.get_user_input()
 
         messages = [
-            {"role": "system", "content": f"{prompt}\n memory:{conversation_history}"},
-            {"role": "user", "content": f"<problem>{user_input}</problem>"}
+            {"role": "system", "content": f"{prompt}\n {conversation_history}\n Today's date is {datetime.now()}\n{final_answer}"},
+            {"role": "user", "content": f"<requirements>{user_input}</requirements>"}
         ]
 
         if self.server == 'vllm':
@@ -94,7 +97,7 @@ class BaseAgent(ABC, Generic[StateT]):
         else:
             response = self.llm.invoke(messages)
 
-        updates = self.process_response(response, user_input)
+        updates = self.process_response(response, user_input, state)
         for key, value in updates.items():
             state = self.update_state(key, value, state)
         return state

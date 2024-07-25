@@ -1,11 +1,26 @@
 # Meta Expert
-An implmentation of the meta agent prompt engineering framework.
+A project for versatile AI agents that can run with proprietary models or completely open-source. The meta expert has two agents a basic [Meta Agent](Docs/Meta-Prompting%20Overview.MD) , and [Jar3d](Docs/Introduction%to%Jar3d) a more sophisticated and versatile agent.
 
-Paper on **Meta-Prompting** [source](https://arxiv.black/pdf/2401.12954)
+## Table of Contents
+1. [Core Concepts](#introduction)
+2. [Prerequisites](#prerequisites)
+   - [Environment Setup](#environment-setup)
+3. [Repository Setup](#repository-setup)
+4. [API Key Configuration](#api-key-configuration)
+5. [Basic Meta Agent Setup](#setup-for-basic-meta-agent)
+6. [Jar3d Setup](#setup-for-jar3d)
+   - [Setting up the NLM-Ingestor Server](#1-setting-up-the-nlm-ingestor-server)
+7. [Working with Ollama](#if-you-want-to-work-with-ollama)
 
-### Prerequisites
+## Core Concepts
+This project leverages three core concepts
+1. Meta prompting: For more information, refer to the paper on **Meta-Prompting** ([source](https://arxiv.black/pdf/2401.12954)). Read our notes on [Meta-Prompt](Docs/Meta-Prompting%20Overview.MD) for a more concise overview.
+2. Chain of Reasoning: For the [Jar3d](#setup-for-jar3d), we also leverage an adaptation of [Chain-of-Reasoning](https://github.com/ProfSynapse/Synapse_CoR) 
+3. [Jar3d](#setup-for-jar3d) uses retrieval augmented generation, this isn't used within the [Basic Meta Agent](#setup-for-basic-meta-agent). Read our notes on [Agentic RAG](Docs/Overview%of%Agentic%RAG).
 
-#### Environment Setup
+## Prerequisites
+
+### Environment Setup
 1. **Install Anaconda:**  
    Download Anaconda from [https://www.anaconda.com/](https://www.anaconda.com/).
 
@@ -19,13 +34,13 @@ Paper on **Meta-Prompting** [source](https://arxiv.black/pdf/2401.12954)
    conda activate agent_env
    ```
 
-### Clone and Navigate to the Repository
-1. **Clone the Repo:**
+## Repository Setup
+1. **Clone the Repository:**
    ```bash
    git clone https://github.com/brainqub3/meta_expert.git
    ```
 
-2. **Navigate to the Repo:**
+2. **Navigate to the Repository:**
    ```bash
    cd /path/to/your-repo/meta_expert
    ```
@@ -35,8 +50,8 @@ Paper on **Meta-Prompting** [source](https://arxiv.black/pdf/2401.12954)
    pip install -r requirements.txt
    ```
 
-### Configure API Keys
-1. **Open the `config.yaml`:**
+## API Key Configuration
+1. **Open the `config.yaml` file:**
    ```bash
    nano config.yaml
    ```
@@ -48,20 +63,79 @@ Paper on **Meta-Prompting** [source](https://arxiv.black/pdf/2401.12954)
    - **Claude API Key:** Get it from [https://docs.anthropic.com/en/api/getting-started](https://docs.anthropic.com/en/api/getting-started)
    - **Groq API Key:** Get it from [https://console.groq.com/keys](https://console.groq.com/keys)
 
-### Run Your Query In Shell
+## Setup for Basic Meta Agent
+The basic meta agent is an early iteration of the project. It demonstrates meta prompting rather than being a useful tool for research. It uses a naive approach of scraping the entirety of a web page and feeding that into the context of the meta agent, who either continues the task or delivers a final answer. 
+
+### Run Your Query in Shell
 ```bash
 python -m agents.meta_agent
 ```
 Then enter your query.
 
+## Setup for Jar3d
+Jar3d is a more sophisticated agent that uses RAG, Chain-of-Reasoning, and Meta-Prompting to complete long-running research tasks. 
+
+Try Jar3d with:
+- Writing a newsletter - [Example](Docs/Example Outputs/Llama%3.1%Newsletter.MD)
+- Writing a literature review
+- As a holiday assistant
+
+Jar3d is in active development, and its capabilities are expected to improve with better models. Feedback is greatly appreciated.
+
+Jar3d is capable of running 100% locally. However, the setup itself is non-trivial. There are two components to set up:
+
+1. The nlm-ingestor server
+2. Running the application
+
+### 1. Setting up the NLM-Ingestor Server
+
+Running Jar3d requires you to set up your own backend server to run the document parsing. We leverage the [nlm-ingestor](https://github.com/nlmatics/nlm-ingestor) and [llm-sherpa](https://github.com/nlmatics/llmsherpa?tab=readme-ov-file) from NLMatics to do this.
+
+The nlm-ingestor uses a modified version of Apache Tika for parsing documents. The server will be deployed locally on whatever machine you run the Docker image. 
+
+*The server provides an easy way to parse and intelligently chunk a variety of documents including "HTML", "PDF", "Markdown", and "Text". There is an option to turn on OCR; check out the [docs](https://github.com/nlmatics/nlm-ingestor#:~:text=to%20apply%20OCR%20add%20%26applyOcr%3Dyes).*
+
+#### Steps
+
+1. Ensure you have [Docker](https://www.docker.com/) installed on your machine. Once installed, ensure you have started the Docker daemon. 
+
+2. Next, pull the Docker image from nlmatics:
+   ```bash
+   docker pull ghcr.io/nlmatics/nlm-ingestor:v0.1.6
+   ```
+
+3. Once you have pulled the image, you can run the container:
+   ```bash
+   docker run -p 5010:5001 ghcr.io/nlmatics/nlm-ingestor:v0.1.6
+   ```
+
+4. Navigate to `config/config.yaml` and check that the `LLM_SHERPA_SERVER` variable is exactly like this:
+   ```
+   http://localhost:5010/api/parseDocument?renderFormat=all
+   ```
+
+   *Note: You can change the port mapping from 5010 to whatever mapping you want. You must ensure that it is consistent with the mapping you select in the `docker run` command.*
+
+5. Once you're ready, you can start the RAG-agent by running the following from the meta_expert directory:
+   ```bash
+   python -m agents.jar3d
+   ```
+
 ## If you want to work with Ollama
 
 ### Setup Ollama Server
 1. **Download Ollama:**
-   Download [https://ollama.com/download](https://ollama.com/download)
+   Download from [https://ollama.com/download](https://ollama.com/download)
 
 2. **Download an Ollama Model:**
    ```bash
    curl http://localhost:11434/api/pull -d "{\"name\": \"llama3\"}"
    ```
-Ollama [API documentation](https://github.com/ollama/ollama/blob/main/docs/api.md#list-local-models)
+
+For more information, refer to the Ollama [API documentation](https://github.com/ollama/ollama/blob/main/docs/api.md#list-local-models).
+
+## On the Roadmap for Jar3d
+- Feedback to Jar3d so that final responses can be iterated on and amended.
+- Long term memory.
+- Frontend.
+- Integrations to RAG platforms for more intelligent document processing and faster RAG.

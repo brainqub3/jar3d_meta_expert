@@ -43,9 +43,11 @@ class ClaudeModel:
                     "content": content
                 }
             ],
-            "max_tokens": 4000,
+            "max_tokens": 4096,
             "temperature": self.temperature,
         }
+
+        time.sleep(6)
 
         try:
             request_response = requests.post(
@@ -56,11 +58,13 @@ class ClaudeModel:
             
             # print("REQUEST RESPONSE", request_response.status_code)
             request_response_json = request_response.json()
+            # print(f"\n\nRESPONSE JSON: {request_response_json}\n\n")
 
             if 'content' not in request_response_json or not request_response_json['content']:
                 raise ValueError("No content in response")
 
             response_content = request_response_json['content'][0]['text']
+            # print(f"\n\nRESPONSE CONTENT: {response_content}\n\n")
             
             if self.json_response:
                 response = json.dumps(json.loads(response_content))
@@ -170,7 +174,7 @@ class GroqModel:
             "temperature": self.temperature,
         }
 
-        time.sleep(5)
+        time.sleep(10)
 
         if self.json_response:
             payload["response_format"] = {"type": "json_object"}
@@ -184,6 +188,7 @@ class GroqModel:
             
             # print("REQUEST RESPONSE", request_response.status_code)
             request_response_json = request_response.json()
+            # print(f"\n\nRESPONSE JSON: {request_response_json}\n\n")
             
             if 'choices' not in request_response_json or len(request_response_json['choices']) == 0:
                 raise ValueError("No choices in response")

@@ -36,3 +36,15 @@ guided_json_router_decision = {
   },
   "required": ["router_decision"]
 }
+
+
+guided_json_parse_expert = {
+  "type": "object",
+  "properties": {
+    "expert": {
+      "type": "string",
+      "description": "Expert Planner or Expert Writer"
+    }
+  },
+  "required": ["expert"]
+}
