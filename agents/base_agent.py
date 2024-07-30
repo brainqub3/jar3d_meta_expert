@@ -87,8 +87,8 @@ class BaseAgent(ABC, Generic[StateT]):
             user_input = self.get_user_input()
 
         messages = [
-            {"role": "system", "content": f"{prompt}\n {conversation_history}\n Today's date is {datetime.now()}\n{final_answer}"},
-            {"role": "user", "content": f"<requirements>{user_input}</requirements>"}
+            {"role": "system", "content": f"{prompt}\n Today's date is {datetime.now()}"},
+            {"role": "user", "content": f"\n{final_answer} \n{conversation_history}\n <requirements>{user_input}</requirements>"}
         ]
 
         if self.server == 'vllm':

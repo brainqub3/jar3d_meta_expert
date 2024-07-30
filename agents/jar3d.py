@@ -220,7 +220,7 @@ class MetaExpert(BaseAgent[State]):
         expert_message_history = f"""<Ex> \n ## Your Expert Plan {state.get("expert_plan", [])} \n 
         ## Your Expert Research {state.get("expert_research", [])} \n ## Your Expert Writing {state.get("expert_writing", [])}
         </Ex>"""
-
+        
         return expert_message_history
     
     def get_user_input(self) -> str:
@@ -255,10 +255,13 @@ class MetaExpert(BaseAgent[State]):
 
         state = self.invoke(state=state, user_input=formatted_requirements, final_answer=final_answer)
 
-        meta_prompt = state['meta_prompt'][-1]["content"]
-        meta_prompt_cor = '\n\n'.join(re.findall(r'```python\s*([\s\S]*?)\s*```', meta_prompt, re.MULTILINE))
 
-        print(colored(f"\n\n Chain of Reasoning: {meta_prompt_cor}\n\n", 'green'))
+        # print(f"\n\nDEBUG: {state}\n\n")
+        meta_prompt_cor = state['meta_prompt'][-1]["content"]
+
+        # meta_prompt_cor_formatted = '\n\n'.join(re.findall(r'```python\s*([\s\S]*?)\s*```', meta_prompt_cor, re.MULTILINE))
+
+        print(colored(f"\n\n Meta-Prompt Chain of Reasoning: {meta_prompt_cor}\n\n", 'green'))
         
         return state
     
@@ -673,7 +676,7 @@ if __name__ == "__main__":
     recursion_limit = 30
     state["recursion_limit"] = recursion_limit
     state["user_input"] = "/start"
-    limit = {"recursion_limit": recursion_limit + 10} # One required as a buffer.
+    limit = {"recursion_limit": recursion_limit + 30} # Required as a buffer.
 
     for event in workflow.stream(state, limit):
         pass

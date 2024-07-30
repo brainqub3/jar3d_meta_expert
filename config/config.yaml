@@ -1,6 +1,6 @@
-CLAUDE_API_KEY:
+CLAUDE_API_KEY: 
 GEMINI_API_KEY: 
 GROQ_API_KEY: 
 OPENAI_API_KEY: 
 SERPER_API_KEY: 
-LLM_SHERPA_SERVER: http://localhost:5010/api/parseDocument?renderFormat=all
+LLM_SHERPA_SERVER: http://localhost:5010/api/parseDocument?renderFormat=all&applyOcr=yes&useNewIndentParser=yes

@@ -31,19 +31,6 @@ def scraper(url: str, doc_type: str) -> dict:
     else:
         return {"source": url, "content": AIMessage("Unsupported document type, supported types are 'html' and 'pdf'.")}
 
-# def scrape_html(url):
-#     loader = AsyncChromiumLoader([url])
-#     html = loader.load() 
-#     # Transform
-#     bs_transformer = BeautifulSoupTransformer()
-#     docs_transformed = bs_transformer.transform_documents(html, tags_to_extract=["p"])
-#     print(docs_transformed[0].page_content)
-
-# def scrape_pdf(url):
-#     loader = PyPDFLoader(url)
-#     pages = loader.load_and_split()
-#     return pages
-
 
 if __name__ == "__main__":
     scraper("https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/pdf/", "html")

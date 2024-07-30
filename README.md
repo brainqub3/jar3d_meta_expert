@@ -96,18 +96,19 @@ The nlm-ingestor uses a modified version of Apache Tika for parsing documents. T
 
 *The server provides an easy way to parse and intelligently chunk a variety of documents including "HTML", "PDF", "Markdown", and "Text". There is an option to turn on OCR; check out the [docs](https://github.com/nlmatics/nlm-ingestor#:~:text=to%20apply%20OCR%20add%20%26applyOcr%3Dyes).*
 
-#### Steps
+#### Setup Steps
 
 1. Ensure you have [Docker](https://www.docker.com/) installed on your machine. Once installed, ensure you have started the Docker daemon. 
 
 2. Next, pull the Docker image from nlmatics:
    ```bash
-   docker pull ghcr.io/nlmatics/nlm-ingestor:v0.1.6
+   docker pull jamesmtc/nlm-ingestor:latest
    ```
+   *Note this version of the docker image is unofficial, it is being used as a stop-gap until the library authors fix bugs in the official version*
 
 3. Once you have pulled the image, you can run the container:
    ```bash
-   docker run -p 5010:5001 ghcr.io/nlmatics/nlm-ingestor:v0.1.6
+   docker run -p 5010:5001 jamesmtc/nlm-ingestor:latest
    ```
 
 4. Navigate to `config/config.yaml` and check that the `LLM_SHERPA_SERVER` variable is exactly like this:
@@ -121,6 +122,9 @@ The nlm-ingestor uses a modified version of Apache Tika for parsing documents. T
    ```bash
    python -m agents.jar3d
    ```
+
+#### Interacting with Jar3d
+Once you're setup, Jar3d will proceed to introduce itself and ask some questions. The questions are designed to help you refine your requirements. When you feel you have provided all the relevant information to Jar3d, you can end the questioning part of the workflow play typing `/end`.
 
 ## If you want to work with Ollama
 
