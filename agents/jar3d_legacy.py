@@ -14,7 +14,6 @@ from tools.advanced_scraper import scraper
 from tools.google_serper import serper_search
 from utils.logging import log_function, setup_logging
 from utils.message_handling import get_ai_message_contents
-from tools.offline_rag_tool import run_rag
 from prompt_engineering.guided_json_lib import (
     guided_json_search_query, 
     guided_json_best_url, 
@@ -58,6 +57,32 @@ state: State = {
     "chat_finished": False,
     "recursion_limit": None
 }
+
+# def extract_last_ai_message(conversation_history):
+    
+#     # Iterate through the list in reverse order to find the last AIMessage
+#     for message in reversed(conversation_history):
+#         if isinstance(message, dict) and message.get('content', '').startswith('Expert'):
+#             return message['content']
+    
+#     # Return None if no AIMessage is found
+#     return None
+
+
+# def parse_expert_text(text):
+#     pattern = r'(Expert\s+\w+(?:\s+\w+)*):\s*\n?\s*"""([\s\S]*?)"""'
+#     match = re.search(pattern, text, re.DOTALL)
+    
+#     if match:
+#         print("Match found!")
+#         expert_designation = match.group(1)
+#         content = match.group(2).strip()
+#         print(f"\n\n Expert designation: {expert_designation}")
+#         # print(f"\n\n Content: {content}")
+#         return expert_designation
+#     else:
+#         print("No match found.")
+#         return ""
 
 def chat_counter(state: State) -> State:
     chat_limit = state.get("chat_limit")
@@ -192,16 +217,8 @@ class MetaExpert(BaseAgent[State]):
     # @log_function(logger)
     def get_conv_history(self, state: State) -> str:
 
-        all_expert_research = []
-
-        if state["expert_research"]:
-            expert_research = state["expert_research"]
-            all_expert_research.extend(expert_research)
-        else:
-            all_expert_research = []
-
         expert_message_history = f"""<Ex> \n ## Your Expert Plan {state.get("expert_plan", [])} \n 
-        ## Your Expert Research {all_expert_research} \n ## Your Expert Writing {state.get("expert_writing", [])}
+        ## Your Expert Research {state.get("expert_research", [])} \n ## Your Expert Writing {state.get("expert_writing", [])}
         </Ex>"""
 
         return expert_message_history
@@ -226,36 +243,23 @@ class MetaExpert(BaseAgent[State]):
         upper_limit_recursions = recursion_limit
         lower_limit_recursions = recursion_limit - 2
 
-        if recursions >= lower_limit_recursions and recursions <= upper_limit_recursions:
+        if (recursions >= lower_limit_recursions and recursions <= upper_limit_recursions) or recursions > upper_limit_recursions :
             final_answer = "**You are being explicitly told to produce your [Type 2] work now!**"
-        elif recursions > upper_limit_recursions:
-            extra_recursions = recursions - upper_limit_recursions
-            base_message = "**You are being explicitly told to produce your [Type 2] work now!**"
-            final_answer = (base_message + "\n") * (extra_recursions + 1)
         else:
             final_answer = None
-
-        # if (recursions >= lower_limit_recursions and recursions <= upper_limit_recursions) or recursions > upper_limit_recursions :
-        #     final_answer = "**You are being explicitly told to produce your [Type 2] work now!**"
-        # else:
-        #     final_answer = None
 
         requirements = state['requirements_gathering'][-1].content
         formatted_requirements = '\n\n'.join(re.findall(r'```python\s*([\s\S]*?)\s*```', requirements, re.MULTILINE))
 
         print(colored(f"\n\n User Requirements: {formatted_requirements}\n\n", 'green'))
 
-        if state.get("meta_prompt"):
-            meta_prompt = state['meta_prompt'][-1].content
-            cor_match = re.search(r'(CoR\s*=\s*\{[^}]+\})', meta_prompt, re.DOTALL)
-            cor_string = cor_match.group(1)
-            user_input = f"{formatted_requirements}\n\n Here is your last CoR {cor_string} update your CoR from here."
-        else:
-            user_input = formatted_requirements
+        state = self.invoke(state=state, user_input=formatted_requirements, final_answer=final_answer)
 
-        state = self.invoke(state=state, user_input=user_input, final_answer=final_answer)
 
+        # print(f"\n\nDEBUG: {state}\n\n")
         meta_prompt_cor = state['meta_prompt'][-1]["content"]
+
+        # meta_prompt_cor_formatted = '\n\n'.join(re.findall(r'```python\s*([\s\S]*?)\s*```', meta_prompt_cor, re.MULTILINE))
 
         print(colored(f"\n\n Meta-Prompt Chain of Reasoning: {meta_prompt_cor}\n\n", 'green'))
         
@@ -315,7 +319,6 @@ class NoToolExpert(BaseAgent[State]):
             expert_update_key = "expert_plan"
         if associated_expert == "Expert Writer":
             expert_update_key = "expert_writing"
-            
 
         updates_conversation_history = {
             "conversation_history": [
@@ -346,18 +349,7 @@ class NoToolExpert(BaseAgent[State]):
     # @log_function(logger)
     def run(self, state: State) -> State:
         # chat_counter(state)
-        all_expert_research = []
-        meta_prompt = state["meta_prompt"][1].content
-
-        if state.get("expert_research"):
-            expert_research = state["expert_research"]
-            all_expert_research.extend(expert_research)
-            research_prompt = f"\n Your response must be delivered considering following research.\n ## Research\n {all_expert_research} "
-            user_input = f"{meta_prompt}\n{research_prompt}"
-
-        else:
-            user_input = meta_prompt
-
+        user_input = state["meta_prompt"][1].content
         state = self.invoke(state=state, user_input=user_input)        
         return state
     
@@ -398,7 +390,7 @@ class ToolExpert(BaseAgent[State]):
             results = serper_search(tool_input)
             return results
         elif mode == "rag":
-            results = run_rag(urls=tool_input, query=query)
+            results = rag_tool(url=tool_input, query=query)
             return results
 
     # @log_function(logger)
@@ -477,65 +469,50 @@ class ToolExpert(BaseAgent[State]):
 
         """
         meta_prompt = state["meta_prompt"][-1].content
+        previous_search_queries = state.get("previous_search_queries", [])
+        # state = self.invoke(state=state, user_input=user_input, counter=counter)
+        # full_query = state["conversation_history"][-1].get("content")
 
-        iterations = 0
-        urls = []
-        max_iterations = 5
+        refine_query = self.get_llm(json_model=True)
+        refine_prompt = refine_query_template.format(manager_instructions=meta_prompt, previous_search_queries=previous_search_queries)
+        input = [
+                {"role": "user", "content": "Get the search query"},
+                {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
+            ]
+        
+        if self.server == 'vllm':
+            guided_json = guided_json_search_query
+            refined_query = refine_query.invoke(input, guided_json)
+        else:
+            refined_query = refine_query.invoke(input)
 
-        while iterations <= max_iterations:
-            iterations += 1
-            previous_search_queries = state.get("previous_search_queries", [])
-            refine_query = self.get_llm(json_model=True)
-            refine_prompt = refine_query_template.format(manager_instructions=meta_prompt, previous_search_queries=previous_search_queries)
-            input = [
-                    {"role": "user", "content": "Get the search query"},
-                    {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
-                ]
-            
-            if self.server == 'vllm':
-                guided_json = guided_json_search_query
-                refined_query = refine_query.invoke(input, guided_json)
-            else:
-                refined_query = refine_query.invoke(input)
+        refined_query_json = json.loads(refined_query)
+        refined_query = refined_query_json.get("search_query")
 
-            refined_query_json = json.loads(refined_query)
-            refined_query = refined_query_json.get("search_query")
+        print(colored(f"\n\n Refined Search Query: {refined_query}\n\n", 'green'))
 
-            print(colored(f"\n\n Refined Search Query: {refined_query}\n\n", 'green'))
+        state["previous_search_queries"] = refined_query
+        serper_response = self.use_tool("serper", refined_query)
 
-            state["previous_search_queries"] = refined_query
-            serper_response = self.use_tool("serper", refined_query)
+        best_url = self.get_llm(json_model=True)
+        best_url_prompt = best_url_template.format(manager_instructions=meta_prompt, serper_results=serper_response)
+        input = [
+                {"role": "user", "content": serper_response},
+                {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
 
-            best_url = self.get_llm(json_model=True)
-            best_url_prompt = best_url_template.format(manager_instructions=refined_query, serper_results=serper_response)
-            input = [
-                    {"role": "user", "content": serper_response},
-                    {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
+            ]
+        
+        if self.server == 'vllm':
+            guided_json = guided_json_best_url
+            best_url = best_url.invoke(input, guided_json)
+        else:
+            best_url = best_url.invoke(input)
 
-                ]
-            
-            if self.server == 'vllm':
-                guided_json = guided_json_best_url
-                best_url = best_url.invoke(input, guided_json)
-            else:
-                best_url = best_url.invoke(input)
-
-            best_url_json = json.loads(best_url)
-            best_url = best_url_json.get("best_url")
-
-            if best_url:
-                urls.append(best_url)
-
-        # Remove duplicates from the list of URLs
-        unique_urls = list(dict.fromkeys(urls))
-
-        print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'green'))
-        for i, url in enumerate(unique_urls, 1):
-            print(colored("  {}. {}".format(i, url), 'green'))
-        print()  # A
+        best_url_json = json.loads(best_url)
+        best_url = best_url_json.get("best_url")
 
         meta_prompt = state["meta_prompt"][-1].content
-        scraper_response = self.use_tool("rag", tool_input=unique_urls, query=meta_prompt)
+        scraper_response = self.use_tool("rag", tool_input=best_url, query=meta_prompt)
         updates = self.process_response(scraper_response, user_input="Research")
 
         for key, value in updates.items():
@@ -697,10 +674,10 @@ if __name__ == "__main__":
     )
     workflow = graph.compile()
 
-    recursion_limit = 5
+    recursion_limit = 30
     state["recursion_limit"] = recursion_limit
     state["user_input"] = "/start"
-    limit = {"recursion_limit": recursion_limit + 10} # Required as a buffer.
+    limit = {"recursion_limit": recursion_limit + 30} # Required as a buffer.
 
     for event in workflow.stream(state, limit):
         pass

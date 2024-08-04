@@ -2,10 +2,13 @@ import json
 import textwrap
 import re
 import logging
+import asyncio
+import chainlit as cl
 from termcolor import colored
 from datetime import datetime
 from typing import Any, Dict, Union, List
 from typing import TypedDict, Annotated
+from langgraph.graph import END
 from langgraph.graph.message import add_messages
 from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
@@ -31,7 +34,7 @@ class MessageDict(TypedDict):
     content: str
 
 class State(TypedDict):
-    meta_prompt: Annotated[List[MessageDict], add_messages]
+    meta_prompt: Annotated[List[dict], add_messages]
     conversation_history: Annotated[List[dict], add_messages]
     requirements_gathering: Annotated[List[str], add_messages]
     expert_plan: str
@@ -39,10 +42,11 @@ class State(TypedDict):
     expert_writing: str
     user_input: Annotated[List[str], add_messages]
     previous_search_queries: Annotated[List[dict], add_messages]
-    router_decision: bool
+    router_decision: str
     chat_limit: int
     chat_finished: bool
     recursion_limit: int
+    final_answer: str
 
 state: State = {
     "meta_prompt": [],
@@ -56,7 +60,8 @@ state: State = {
     "router_decision": None,
     "chat_limit": None,
     "chat_finished": False,
-    "recursion_limit": None
+    "recursion_limit": None,
+    "final_answer": None
 }
 
 def chat_counter(state: State) -> State:
@@ -68,10 +73,9 @@ def chat_counter(state: State) -> State:
     return chat_limit
 
 def routing_function(state: State) -> str:
-    if state["router_decision"]:
-        return "no_tool_expert"
-    else:
-        return "tool_expert"
+        decision = state["router_decision"]
+        print(colored(f"\n\n Routing function called. Decision: {decision}\n\n", 'green'))
+        return decision
 
 def set_chat_finished(state: State) -> bool:
     state["chat_finished"] = True
@@ -79,6 +83,7 @@ def set_chat_finished(state: State) -> bool:
     final_response_formatted = re.sub(r'^```python[\s\S]*?```\s*', '', final_response, flags=re.MULTILINE)
     final_response_formatted = final_response_formatted.lstrip()
     print(colored(f"\n\n Jar3d👩‍💻: {final_response_formatted}", 'cyan'))
+    state["final_answer"] = final_response_formatted
 
     return state
 
@@ -88,84 +93,43 @@ class Jar3d(BaseAgent[State]):
         super().__init__(model, server, temperature, model_endpoint, stop)
         self.llm = self.get_llm(json_model=False)
 
-    def get_prompt(self, state:State = None) -> str:
+    def get_prompt(self, state: State = None) -> str:
         system_prompt = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
         return system_prompt
         
-    def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[MessageDict]]:
-        user_input = None
+    def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[Dict[str, str]]]:
         updates_conversation_history = {
             "requirements_gathering": [
                 {"role": "user", "content": f"{user_input}"},
                 {"role": "assistant", "content": str(response)}
-
             ]
         }
         return updates_conversation_history
     
-    # @log_function(logger)
     def get_conv_history(self, state: State) -> str:
-
         conversation_history = state.get('requirements_gathering', [])
-
-        return conversation_history
+        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])
     
     def get_user_input(self) -> str:
-        user_input = input("Enter your query: ")
-        return user_input
-    
+        pass
+
     def get_guided_json(self, state: State) -> Dict[str, Any]:
         pass
 
     def use_tool(self) -> Any:
         pass
 
-    @log_function(logger)
-    def run(self, state: State) -> State:
-        history = self.get_conv_history(state)
-        user_input = state.get("user_input")
-
+    def run_chainlit(self, state: State, message: cl.Message) -> State:
+        user_message = message.content
         system_prompt = self.get_prompt()
-        user_input = f"previous conversation: {history}\n {system_prompt}\n cogor {user_input}"
-
-        while True:
-            history = self.get_conv_history(state)
-            state = self.invoke(state=state, user_input=user_input)
-            response = state['requirements_gathering'][-1]["content"]
-            response = re.sub(r'^```python[\s\S]*?```\s*', '', response, flags=re.MULTILINE)
-            response = response.lstrip()
-
-            print("\n" + "="*80)  # Print a separator line
-            print(colored("Jar3d:", 'cyan', attrs=['bold']))
-            
-            # Wrap the text to a specified width (e.g., 70 characters)
-            wrapped_text = textwrap.fill(response, width=70)
-            
-            # Print each line with proper indentation
-            for line in wrapped_text.split('\n'):
-                print(colored("  " + line, 'green'))
-            
-            print("="*80 + "\n")  #
-            user_input = self.get_user_input()
-            
-            if user_input == "/end":
-                break
-            
-            user_input = f"cogor {user_input}"
-
+        user_input = f"{system_prompt}\n cogor {user_message}"
+    
         state = self.invoke(state=state, user_input=user_input)
         response = state['requirements_gathering'][-1]["content"]
         response = re.sub(r'^```python[\s\S]*?```\s*', '', response, flags=re.MULTILINE)
         response = response.lstrip()
 
-        print("\n" + "="*80)  # Print a separator line
-        print(colored("Jar3d:", 'cyan', attrs=['bold']))
-        for line in wrapped_text.split('\n'):
-                print(colored("  " + line, 'green'))
-            
-        print("="*80 + "\n")
-
-        return state
+        return state, response
 
 
 class MetaExpert(BaseAgent[State]):
@@ -220,6 +184,7 @@ class MetaExpert(BaseAgent[State]):
     def run(self, state: State) -> State:
 
         counter = chat_counter(state)  # Counts every time we invoke the Meta Agent
+        recursion_limit = state.get("recursion_limit")
         recursions = 3*counter - 2
         print(colored(f"\n\n * We have envoked the Meta-Agent {counter} times.\n * we have run {recursions} max total iterations: {recursion_limit}\n\n", "green"))
         
@@ -235,18 +200,21 @@ class MetaExpert(BaseAgent[State]):
         else:
             final_answer = None
 
-        # if (recursions >= lower_limit_recursions and recursions <= upper_limit_recursions) or recursions > upper_limit_recursions :
-        #     final_answer = "**You are being explicitly told to produce your [Type 2] work now!**"
-        # else:
-        #     final_answer = None
+        try:
+            requirements = state['requirements_gathering'][-1]["content"]
+        except: 
+            requirements = state['requirements_gathering'][-1].content
 
-        requirements = state['requirements_gathering'][-1].content
         formatted_requirements = '\n\n'.join(re.findall(r'```python\s*([\s\S]*?)\s*```', requirements, re.MULTILINE))
 
         print(colored(f"\n\n User Requirements: {formatted_requirements}\n\n", 'green'))
 
         if state.get("meta_prompt"):
-            meta_prompt = state['meta_prompt'][-1].content
+            try:
+                meta_prompt = state['meta_prompt'][-1]["content"]
+            except:
+                meta_prompt = state['meta_prompt'][-1].content
+            
             cor_match = re.search(r'(CoR\s*=\s*\{[^}]+\})', meta_prompt, re.DOTALL)
             cor_string = cor_match.group(1)
             user_input = f"{formatted_requirements}\n\n Here is your last CoR {cor_string} update your CoR from here."
@@ -275,8 +243,8 @@ class NoToolExpert(BaseAgent[State]):
         
     def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
 
-        meta_prompts = state.get("meta_prompt", [])
-        associated_meta_prompt = meta_prompts[-1].content
+        # meta_prompts = state.get("meta_prompt", [])
+        associated_meta_prompt = state["meta_prompt"][-1].content
         parse_expert = self.get_llm(json_model=True)
 
         parse_expert_prompt = """
@@ -477,10 +445,11 @@ class ToolExpert(BaseAgent[State]):
 
         """
         meta_prompt = state["meta_prompt"][-1].content
+        # print(colored(f"\n\n Meta-Prompt: {meta_prompt}\n\n", 'green'))
 
         iterations = 0
         urls = []
-        max_iterations = 5
+        max_iterations = 10  # Sets the maximum number of iterations for the search algorithm
 
         while iterations <= max_iterations:
             iterations += 1
@@ -532,7 +501,7 @@ class ToolExpert(BaseAgent[State]):
         print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'green'))
         for i, url in enumerate(unique_urls, 1):
             print(colored("  {}. {}".format(i, url), 'green'))
-        print()  # A
+        print()
 
         meta_prompt = state["meta_prompt"][-1].content
         scraper_response = self.use_tool("rag", tool_input=unique_urls, query=meta_prompt)
@@ -549,20 +518,21 @@ class Router(BaseAgent[State]):
         super().__init__(model, server, temperature, model_endpoint, stop)
         self.llm = self.get_llm(json_model=True)
 
+
     def get_prompt(self, state) -> str:
         system_prompt = state["meta_prompt"][-1].content
         return system_prompt
         
     def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
+
         updates_conversation_history = {
             "router_decision": [
                 {"role": "user", "content": user_input},
                 {"role": "assistant", "content": f"{str(response)}"}
 
-                # {"role": "assistant", "content": f"<Ex>{str(response)}</Ex> Todays date is {datetime.now()}"}
-
             ]
         }
+
         return updates_conversation_history
     
     def get_conv_history(self, state: State) -> str:
@@ -579,9 +549,6 @@ class Router(BaseAgent[State]):
 
     # @log_function(logger)
     def run(self, state: State) -> State:
-
-        # update counter
-        # chat_counter(state)
 
         router_template = """
             Given these instructions from your manager.
@@ -609,98 +576,13 @@ class Router(BaseAgent[State]):
 
         if self.server == 'vllm':
             guided_json = guided_json_router_decision
-            # print(f"\n\n Guided JSON: {guided_json}\n\n JSON TYPE:{type(guided_json)}\n\n")
             router_response = router.invoke(input, guided_json)
         else:
             router_response = router.invoke(input)
 
         router_response = json.loads(router_response)
         router_response = router_response.get("router_decision")
+
         state = self.update_state("router_decision", router_response, state)
-        
+   
         return state
-    
-# Example usage
-if __name__ == "__main__":
-    from langgraph.graph import StateGraph
-
-    # For Claude
-    agent_kwargs = {
-        "model": "claude-3-5-sonnet-20240620",
-        "server": "claude",
-        "temperature": 0.2
-    }
-
-    # For OpenAI
-    # agent_kwargs = {
-    #     "model": "gpt-4o",
-    #     "server": "openai",
-    #     "temperature": 0.2
-    # }
-
-    # Ollama
-    # agent_kwargs = {
-    #     "model": "phi3:instruct",
-    #     "server": "ollama",
-    #     "temperature": 0.5
-    # }
-
-    # Groq
-    # agent_kwargs = {
-    #     "model": "llama3-groq-70b-8192-tool-use-preview",
-    #     "server": "groq",
-    #     "temperature": 0
-    # }
-
-    # # Gemnin - Not currently working, I will be debugging this soon.
-    # agent_kwargs = {
-    #     "model": "gemini-1.5-pro",
-    #     "server": "gemini",
-    #     "temperature": 0.5
-    # }
-
-    # Vllm
-    # agent_kwargs = {
-    #     "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
-    #     "server": "vllm",
-    #     "temperature": 0,
-    #     "model_endpoint": "https://j72ip7q799tpr8-8000.proxy.runpod.net/",
-    # }
-
-    tools_router_agent_kwargs = agent_kwargs.copy()
-    tools_router_agent_kwargs["temperature"] = 0
-
-    def routing_function(state: State) -> str:
-        decision = state["router_decision"]
-        print(colored(f"\n\n Routing function called. Decision: {decision}\n\n", 'green'))
-        return decision
-
-    graph = StateGraph(State)
-
-    graph.add_node("jar3d", lambda state: Jar3d(**agent_kwargs).run(state=state))
-    graph.add_node("meta_expert", lambda state: MetaExpert(**agent_kwargs).run(state=state))
-    graph.add_node("router", lambda state: Router(**tools_router_agent_kwargs).run(state=state))
-    graph.add_node("no_tool_expert", lambda state: NoToolExpert(**agent_kwargs).run(state=state))
-    graph.add_node("tool_expert", lambda state: ToolExpert(**tools_router_agent_kwargs).run(state=state))
-    graph.add_node("end_chat", lambda state: set_chat_finished(state))
-
-    graph.set_entry_point("jar3d")
-    graph.set_finish_point("end_chat")
-
-    graph.add_edge("jar3d", "meta_expert")
-    graph.add_edge("meta_expert", "router")
-    graph.add_edge("tool_expert", "meta_expert")
-    graph.add_edge("no_tool_expert", "meta_expert")
-    graph.add_conditional_edges(
-        "router",
-        lambda state: routing_function(state),
-    )
-    workflow = graph.compile()
-
-    recursion_limit = 5
-    state["recursion_limit"] = recursion_limit
-    state["user_input"] = "/start"
-    limit = {"recursion_limit": recursion_limit + 10} # Required as a buffer.
-
-    for event in workflow.stream(state, limit):
-        pass

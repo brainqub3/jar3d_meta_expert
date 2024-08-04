@@ -29,31 +29,6 @@ Both prompts incorporate adaptations of the Chain of Reasoning technique.
 ### Jar3d Architecture
 The Jar3d architecture incorporates aspects of Meta-Prompting, Agentic RAG, and an adaptation of [Chain of Reasoning](https://github.com/ProfSynapse/Synapse_CoR).
 
-```mermaid
-graph TD
-    A[Jar3d] -->|Gathers requirements| B[MetaExpert]
-    B -->|Uses chain of reasoning| C{Router}
-    C -->|Tool needed| D[Tool Expert]
-    C -->|No tool needed| E[Non-Tool Expert]
-    D -->|Internet research & RAG| F[Result]
-    E -->|Writer or Planner| G[Result]
-    F --> B
-    G --> B
-    B --> C
-    C -->|Final output| I[Deliver to User]
-    C -->|Needs more detail| B
-    
-    subgraph "Jar3d Process"
-    J[Start] --> K[Gather Requirements]
-    K --> L{Requirements Adequate?}
-    L -->|No| K
-    L -->|Yes| M[End Jar3d Process]
-    end
-    
-    A -.-> J
-    M -.-> B
-```
-
 
 ### Jar3d's Retrieval Mechanism for Internet Research
 

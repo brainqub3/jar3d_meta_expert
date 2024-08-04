@@ -76,6 +76,8 @@ Then enter your query.
 ## Setup for Jar3d
 Jar3d is a more sophisticated agent that uses RAG, Chain-of-Reasoning, and Meta-Prompting to complete long-running research tasks. 
 
+*Note: Currently, th best results are with Claude 3.5 Sonnet and Llama 3.1 70B. Results with GPT-4o are inconsistent*
+
 Try Jar3d with:
 - Writing a newsletter - [Example](Docs/Example%20Outputs/Llama%203.1%20Newsletter.MD)
 - Writing a literature review
@@ -118,10 +120,18 @@ The nlm-ingestor uses a modified version of Apache Tika for parsing documents. T
 
    *Note: You can change the port mapping from 5010 to whatever mapping you want. You must ensure that it is consistent with the mapping you select in the `docker run` command.*
 
-5. Once you're ready, you can start the RAG-agent by running the following from the meta_expert directory:
+5. Once you're ready, you can kickstart the Jar3d web-app by running the following from the meta_expert directory.
+   ```bash
+   chainlit run chat.py
+   ```
+   *Note that you will need to ensure that you uncomment the relevant agent_kwargs in the chat.py script*
+
+6. There is a CLI version of Jar3d you can run if you would prefer to. Simply run the following command from the meta_expert directory.
    ```bash
    python -m agents.jar3d
    ```
+   *Note that you will need to ensure that you uncomment the relevant agent_kwargs in the jar3d.py script*
+
 
 #### Interacting with Jar3d
 Once you're setup, Jar3d will proceed to introduce itself and ask some questions. The questions are designed to help you refine your requirements. When you feel you have provided all the relevant information to Jar3d, you can end the questioning part of the workflow play typing `/end`.

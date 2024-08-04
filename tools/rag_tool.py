@@ -102,7 +102,7 @@ def rag_tool(url: str, query: str) -> List[Dict[str, str]]:
         print(colored("\n\nRe-ranking complete\n\n", "green"))
 
         return results
-    except (ConnectionError, Timeout, RequestException, ProtocolError) as e:
+    except Exception as e:
         print(colored(f"Error in rag_tool: {str(e)}", "red"))
         import traceback
         traceback.print_exc()
