@@ -98,21 +98,21 @@ async def start():
     # agent_kwargs = {
     #     "model": "gpt-4o",
     #     "server": "openai",
-    #     "temperature": 0.2
+    #     "temperature": 0.1
     # }
 
     # Claude 
     agent_kwargs = {
         "model": "claude-3-5-sonnet-20240620",
         "server": "claude",
-        "temperature": 0
+        "temperature": 0.1
     }
 
         # Ollama
     # agent_kwargs = {
     #     "model": "phi3:instruct",
     #     "server": "ollama",
-    #     "temperature": 0.5
+    #     "temperature": 0.1
     # }
 
     # Groq
@@ -126,15 +126,15 @@ async def start():
     # agent_kwargs = {
     #     "model": "gemini-1.5-pro",
     #     "server": "gemini",
-    #     "temperature": 0.5
+    #     "temperature": 0.1
     # }
 
     # Vllm
     # agent_kwargs = {
-    #     "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+    #     "model": "meta-llama/Meta-Llama-3.1-70B-Instruct",
     #     "server": "vllm",
-    #     "temperature": 0,
-    #     "model_endpoint": "https://qe0ku2nxiseerx-8000.proxy.runpod.net/",
+    #     "temperature": 0.1,
+    #     "model_endpoint": "https://dow9w19ap6gjhl-8000.proxy.runpod.net/",
     # }
 
 
@@ -174,7 +174,7 @@ def run_workflow(state):
     checkpointer = MemorySaver()
     workflow = graph.compile(checkpointer)
 
-    recursion_limit = 4
+    recursion_limit = 10
     state["recursion_limit"] = recursion_limit
     state["user_input"] = "/start"
     configs = {"recursion_limit": recursion_limit + 10, "configurable": {"thread_id": 42}}

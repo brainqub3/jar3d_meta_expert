@@ -20,7 +20,7 @@ from utils.message_handling import get_ai_message_contents
 from tools.offline_rag_tool import run_rag
 from prompt_engineering.guided_json_lib import (
     guided_json_search_query, 
-    guided_json_best_url, 
+    guided_json_best_url_two, 
     guided_json_router_decision, 
     guided_json_parse_expert
 )
@@ -94,7 +94,11 @@ class Jar3d(BaseAgent[State]):
         self.llm = self.get_llm(json_model=False)
 
     def get_prompt(self, state: State = None) -> str:
-        system_prompt = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
+
+        if self.server == 'claude':
+            system_prompt = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.xml')
+        else:   
+            system_prompt = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
         return system_prompt
         
     def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[Dict[str, str]]]:
@@ -139,7 +143,10 @@ class MetaExpert(BaseAgent[State]):
         self.llm = self.get_llm(json_model=False)
 
     def get_prompt(self, state:None) -> str:
-        system_prompt = read_markdown_file('prompt_engineering/jar3d_meta_prompt.md')
+        if self.server == 'claude':
+            system_prompt = read_markdown_file('prompt_engineering/jar3d_meta_prompt.xml')
+        else:
+            system_prompt = read_markdown_file('prompt_engineering/jar3d_meta_prompt.md')
         return system_prompt
         
     def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[MessageDict]]:
@@ -440,8 +447,7 @@ class ToolExpert(BaseAgent[State]):
             **Return the following JSON:**
 
 
-            {{"best_url": The URL of the serper results that aligns most with the instructions from your manager.,
-            "pdf": A boolean value indicating whether the URL is a PDF or not. This should be True if the URL is a PDF, and False otherwise.}}
+            {{"best_url": The URL of the serper results that aligns most with the instructions from your manager.}}
 
         """
         meta_prompt = state["meta_prompt"][-1].content
@@ -484,7 +490,7 @@ class ToolExpert(BaseAgent[State]):
                 ]
             
             if self.server == 'vllm':
-                guided_json = guided_json_best_url
+                guided_json = guided_json_best_url_two
                 best_url = best_url.invoke(input, guided_json)
             else:
                 best_url = best_url.invoke(input)

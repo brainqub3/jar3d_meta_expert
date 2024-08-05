@@ -25,6 +25,17 @@ guided_json_best_url = {
 }
 
 
+guided_json_best_url_two = {
+  "type": "object",
+  "properties": {
+    "best_url": {
+      "type": "string",
+      "description": "The URL of the Serper results that aligns most with the instructions from your manager."
+    },
+  },
+  "required": ["best_url"]
+}
+
 
 guided_json_router_decision = {
   "type": "object",

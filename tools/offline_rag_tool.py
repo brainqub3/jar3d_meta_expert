@@ -69,53 +69,60 @@ def index_and_rank(corpus: List[Document], query: str) -> List[Dict[str, str]]:
     metadata = [doc.metadata for doc in corpus]
 
     print(colored("\n\nCreating FAISS index...\n\n", "green"))
-    # faiss = FAISS(distance_strategy=DistanceStrategy.COSINE, embedding_function=embeddings, )
-    retriever = FAISS.from_texts(texts=texts, embedding=embeddings, metadatas=metadata).as_retriever(search_kwargs={"k": 40, "distance_strategy": DistanceStrategy.COSINE})
-    docs = retriever.invoke(query)
-    print(colored(f"\n\nRetrieved {len(docs)} documents\n\n", "green"))
 
-    passages = []
-    for idx, doc in enumerate(docs, start=1):
-        try:
-            passage = {
-                "id": idx,
-                "text": doc.page_content,
-                "meta": doc.metadata
+    try:
+        retriever = FAISS.from_texts(texts=texts, embedding=embeddings, metadatas=metadata).as_retriever(search_kwargs={"k": 40, "distance_strategy": DistanceStrategy.COSINE})
+        docs = retriever.invoke(query)
+        print(colored(f"\n\nRetrieved {len(docs)} documents\n\n", "green"))
+
+        passages = []
+        
+        for idx, doc in enumerate(docs, start=1):
+            try:
+                passage = {
+                    "id": idx,
+                    "text": doc.page_content,
+                    "meta": doc.metadata
+                }
+                passages.append(passage)
+            except Exception as e:
+                print(colored(f"Error in indexing and ranking: {str(e)}", "red"))
+                traceback.print_exc()
+                passages.append({"id": idx, "text": "Error in indexing and ranking", "meta": {"source": "unknown"}})
+
+        print(colored("\n\nRe-ranking documents...\n\n", "green"))
+        ranker = Ranker(cache_dir=tempfile.mkdtemp())
+        rerankrequest = RerankRequest(query=query, passages=passages)
+        results = ranker.rerank(rerankrequest)
+        print(colored("\n\nRe-ranking complete\n\n", "green"))
+
+        # Calculate the set percentile
+        scores = [result['score'] for result in results]
+        percentile_threshold = 50
+        percentile = np.percentile(scores, percentile_threshold)
+
+        # Keep only the results above the set percentile
+        top_results = [result for result in results if result['score'] > percentile]
+
+        # Convert results to the desired format
+        final_results = [
+            {
+                "text": result['text'],
+                "meta": result['meta'],
+                "score": result['score']
             }
-            passages.append(passage)
-        except Exception as e:
-            print(colored(f"Error in indexing and ranking: {str(e)}", "red"))
-            traceback.print_exc()
-            passages.append({"id": idx, "text": "Error in indexing and ranking", "meta": {"source": "unknown"}})
+            for result in top_results
+        ]
 
-    print(colored("\n\nRe-ranking documents...\n\n", "green"))
-    ranker = Ranker(cache_dir=tempfile.mkdtemp())
-    rerankrequest = RerankRequest(query=query, passages=passages)
-    results = ranker.rerank(rerankrequest)
-    print(colored("\n\nRe-ranking complete\n\n", "green"))
+        # Sort final results by score in descending order
+        final_results.sort(key=lambda x: x["score"], reverse=True)
 
-    # Calculate the set percentile
-    scores = [result['score'] for result in results]
-    percentile_threshold = 50
-    percentile = np.percentile(scores, percentile_threshold)
-
-    # Keep only the results above the set percentile
-    top_results = [result for result in results if result['score'] > percentile]
-
-    # Convert results to the desired format
-    final_results = [
-        {
-            "text": result['text'],
-            "meta": result['meta'],
-            "score": result['score']
-        }
-        for result in top_results
-    ]
-
-    # Sort final results by score in descending order
-    final_results.sort(key=lambda x: x["score"], reverse=True)
-
-    print(colored(f"\n\nKept {len(final_results)} results above the {percentile_threshold}th percentile (score >= {percentile:.4f})\n\n", "green"))
+        print(colored(f"\n\nKept {len(final_results)} results above the {percentile_threshold}th percentile (score >= {percentile:.4f})\n\n", "green"))
+    
+    except Exception as e:
+        print(colored(f"Error in indexing and ranking: {str(e)}", "red"))
+        traceback.print_exc()
+        final_results = [{"text": "Error in indexing and ranking", "meta": {"source": "unknown"}, "score": 0.0}]
 
     return final_results
 
