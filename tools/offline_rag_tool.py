@@ -59,8 +59,9 @@ def intelligent_chunking(url: str) -> List[Dict[str, str]]:
     except Exception as e:        
         print(colored(f"Error in Intelligent Chunking: {str(e)}", "red"))
         traceback.print_exc()
-        return Document(page_content="Error in Intelligent Chunking", metadata={"source": url}) 
-
+        non_chunkable_doc = [Document(page_content="Error in Intelligent Chunking", metadata={"source": url})]
+        return non_chunkable_doc
+    
 def index_and_rank(corpus: List[Document], query: str) -> List[Dict[str, str]]:
     print(colored("\n\nStarting indexing and ranking with FastEmbeddings and FAISS\n\n", "green"))
     embeddings = FastEmbedEmbeddings(model_name='jinaai/jina-embeddings-v2-small-en', max_length=512)

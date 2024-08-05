@@ -105,7 +105,7 @@ async def start():
     agent_kwargs = {
         "model": "claude-3-5-sonnet-20240620",
         "server": "claude",
-        "temperature": 0.2
+        "temperature": 0
     }
 
         # Ollama
@@ -134,7 +134,7 @@ async def start():
     #     "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
     #     "server": "vllm",
     #     "temperature": 0,
-    #     "model_endpoint": "https://sax25fvhw8gdcl-8000.proxy.runpod.net/",
+    #     "model_endpoint": "https://qe0ku2nxiseerx-8000.proxy.runpod.net/",
     # }
 
 
