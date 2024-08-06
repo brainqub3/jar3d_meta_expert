@@ -1,22 +1,18 @@
 import json
-import textwrap
+from multiprocessing import Pool, cpu_count
+import requests
+from tenacity import RetryError
 import re
 import logging
-import asyncio
 import chainlit as cl
 from termcolor import colored
-from datetime import datetime
 from typing import Any, Dict, Union, List
 from typing import TypedDict, Annotated
-from langgraph.graph import END
 from langgraph.graph.message import add_messages
 from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
-from tools.rag_tool import rag_tool
-from tools.advanced_scraper import scraper
 from tools.google_serper import serper_search
 from utils.logging import log_function, setup_logging
-from utils.message_handling import get_ai_message_contents
 from tools.offline_rag_tool import run_rag
 from prompt_engineering.guided_json_lib import (
     guided_json_search_query, 
@@ -348,12 +344,10 @@ class ToolExpert(BaseAgent[State]):
         return system_prompt
         
     def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
-
         updates_conversation_history = {
             "conversation_history": [
                 {"role": "user", "content": user_input},
                 {"role": "assistant", "content": f"{str(response)}"}
-
             ],
             "expert_research": {"role": "assistant", "content": f"{str(response)}"}
         }
@@ -376,22 +370,15 @@ class ToolExpert(BaseAgent[State]):
             results = run_rag(urls=tool_input, query=query)
             return results
 
-    # @log_function(logger)
-    def run(self, state: State) -> State:
-
-        # counter = chat_counter(state)
-
+    def generate_search_queries(self, meta_prompt: str, num_queries: int = 5) -> List[str]:
         refine_query_template = """
         # Objective
         Your mission is to systematically address your manager's instructions by determining 
-        the most appropriate search query to use in the Google search engine.
-        You use a flexible search algorithm to do this.
+        the most appropriate search queries to use in the Google search engine.
+        You will generate {num_queries} different search queries.
 
-        # Manger's Instructions
+        # Manager's Instructions
         {manager_instructions}
-
-        # Your Previous Search Queries
-        {previous_search_queries}
 
         # Flexible Search Algorithm for Simple and Complex Questions
 
@@ -400,116 +387,123 @@ class ToolExpert(BaseAgent[State]):
             - For a complex topic: "[Main topic] overview"
 
             2. For each subsequent search:
-            - You can only see the previous search query, not the current one.
-            - Choose one of these strategies based on the previous query:
+            - Choose one of these strategies:
 
             a. Specify:
-                Add a more specific term or aspect related to the previous query.
+                Add a more specific term or aspect related to the topic.
 
             b. Broaden:
-                Remove a specific term or add "general" or "overview" to the previous query.
+                Remove a specific term or add "general" or "overview" to the query.
 
             c. Pivot:
-                Choose a different but related term from the previous query.
+                Choose a different but related term from the topic.
 
             d. Compare:
                 Add "vs" or "compared to" along with a related term.
 
             e. Question:
-                Rephrase the previous query as a question by adding "what", "how", "why", etc.
-
-            3. Every 5 searches:
-            - Return to the original question or main topic to reset the search path.
-
-            4. Continue until you believe you've covered the topic sufficiently or reached a set number of searches.
+                Rephrase the query as a question by adding "what", "how", "why", etc.
 
         # Response Format
 
         **Return the following JSON:**
-        {{"search_query": Algorithmically refined search query.}}
+        {{
+            "search_queries": [
+                "Query 1",
+                "Query 2",
+                ...
+                "Query {num_queries}"
+            ]
+        }}
 
         Remember:
-        - You cannot see or recall any search results.
-        - You can only see the immediately preceding search query, not the current one.
-        - Each new search must be based solely on the terms used in your previous search.
-        - Adjust your strategy based on whether you're addressing a simple question or exploring a complex topic.
-            """
+        - Generate {num_queries} unique and diverse search queries.
+        - Each query should explore a different aspect or approach to the topic.
+        - Ensure the queries cover various aspects of the manager's instructions.
+        """
 
+        refine_query = self.get_llm(json_model=True)
+        refine_prompt = refine_query_template.format(manager_instructions=meta_prompt, num_queries=num_queries)
+        input = [
+            {"role": "user", "content": "Generate search queries"},
+            {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
+        ]
+        
+        guided_json = guided_json_search_query
+
+        # try:
+        if self.server == 'vllm':
+            refined_queries = refine_query.invoke(input, guided_json)
+        else:
+            refined_queries = refine_query.invoke(input)
+
+        refined_queries_json = json.loads(refined_queries)
+        return refined_queries_json.get("search_queries", [])
+
+    def process_serper_result(self, args):
+        query, serper_response = args
         best_url_template = """
-            Given the serper results, and the instructions from your manager. Select the best URL
+            Given the serper results, and the search query, select the best URL
 
-            # Manger Instructions
-            {manager_instructions}
+            # Search Query
+            {search_query}
 
             # Serper Results
             {serper_results}
 
             **Return the following JSON:**
 
-
-            {{"best_url": The URL of the serper results that aligns most with the instructions from your manager.}}
-
+            {{"best_url": The URL of the serper results that aligns most with the search query.}}
         """
+
+        best_url = self.get_llm(json_model=True)
+        best_url_prompt = best_url_template.format(search_query=query, serper_results=serper_response)
+        input = [
+            {"role": "user", "content": serper_response},
+            {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
+        ]
+        
+        guided_json = guided_json_best_url_two
+
+        # try:
+        if self.server == 'vllm':
+            best_url = best_url.invoke(input, guided_json)
+        else:
+            best_url = best_url.invoke(input)
+
+        best_url_json = json.loads(best_url)
+        return best_url_json.get("best_url")
+
+    def run(self, state: State) -> State:
         meta_prompt = state["meta_prompt"][-1].content
-        # print(colored(f"\n\n Meta-Prompt: {meta_prompt}\n\n", 'green'))
+        print(colored(f"\n\n Meta-Prompt: {meta_prompt}\n\n", 'green'))
 
-        iterations = 0
-        urls = []
-        max_iterations = 10  # Sets the maximum number of iterations for the search algorithm
+        # Generate multiple search queries
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=5)
+        print(colored(f"\n\n Generated Search Queries: {search_queries}\n\n", 'green'))
 
-        while iterations <= max_iterations:
-            iterations += 1
-            previous_search_queries = state.get("previous_search_queries", [])
-            refine_query = self.get_llm(json_model=True)
-            refine_prompt = refine_query_template.format(manager_instructions=meta_prompt, previous_search_queries=previous_search_queries)
-            input = [
-                    {"role": "user", "content": "Get the search query"},
-                    {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
-                ]
-            
-            if self.server == 'vllm':
-                guided_json = guided_json_search_query
-                refined_query = refine_query.invoke(input, guided_json)
-            else:
-                refined_query = refine_query.invoke(input)
+        try:
+            # Use multiprocessing to call Serper tool for each query in parallel
+            with Pool(processes=min(cpu_count(), len(search_queries))) as pool:
+                serper_results = pool.starmap(self.use_tool, [("serper", query) for query in search_queries])
 
-            refined_query_json = json.loads(refined_query)
-            refined_query = refined_query_json.get("search_query")
-
-            print(colored(f"\n\n Refined Search Query: {refined_query}\n\n", 'green'))
-
-            state["previous_search_queries"] = refined_query
-            serper_response = self.use_tool("serper", refined_query)
-
-            best_url = self.get_llm(json_model=True)
-            best_url_prompt = best_url_template.format(manager_instructions=refined_query, serper_results=serper_response)
-            input = [
-                    {"role": "user", "content": serper_response},
-                    {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
-
-                ]
-            
-            if self.server == 'vllm':
-                guided_json = guided_json_best_url_two
-                best_url = best_url.invoke(input, guided_json)
-            else:
-                best_url = best_url.invoke(input)
-
-            best_url_json = json.loads(best_url)
-            best_url = best_url_json.get("best_url")
-
-            if best_url:
-                urls.append(best_url)
+            # Process Serper results to get best URLs
+            with Pool(processes=min(cpu_count(), len(serper_results))) as pool:
+                best_urls = pool.map(self.process_serper_result, zip(search_queries, serper_results))
+        except Exception as e:
+            print(colored(f"Error in multithreaded processing: {str(e)}. Falling back to non-multithreaded approach.", "yellow"))
+            # Fallback to non-multithreaded approach
+            serper_results = [self.use_tool("serper", query) for query in search_queries]
+            best_urls = [self.process_serper_result((query, result)) for query, result in zip(search_queries, serper_results)]
 
         # Remove duplicates from the list of URLs
-        unique_urls = list(dict.fromkeys(urls))
+        unique_urls = list(dict.fromkeys(url for url in best_urls if url))
 
         print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'green'))
         for i, url in enumerate(unique_urls, 1):
             print(colored("  {}. {}".format(i, url), 'green'))
         print()
 
-        meta_prompt = state["meta_prompt"][-1].content
         scraper_response = self.use_tool("rag", tool_input=unique_urls, query=meta_prompt)
         updates = self.process_response(scraper_response, user_input="Research")
 

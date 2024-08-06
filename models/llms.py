@@ -222,7 +222,7 @@ class OllamaModel(BaseModel):
             return json.dumps({"error": f"Error processing response: {str(e)}"})
 
 class VllmModel(BaseModel):
-    def __init__(self, temperature: float, model: str, model_endpoint: str, json_response: bool, stop: str = None, max_retries: int = 3, retry_delay: int = 1):
+    def __init__(self, temperature: float, model: str, model_endpoint: str, json_response: bool, stop: str = None, max_retries: int = 5, retry_delay: int = 1):
         super().__init__(temperature, model, json_response, max_retries, retry_delay)
         self.headers = {"Content-Type": "application/json"}
         self.model_endpoint = model_endpoint + 'v1/chat/completions'

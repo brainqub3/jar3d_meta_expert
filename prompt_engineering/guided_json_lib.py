@@ -1,9 +1,10 @@
 guided_json_search_query = {
   "type": "object",
   "properties": {
-    "search_query": {
-      "type": "string",
-      "description": "The refined Google search engine query that aligns with the response from your managers."
+    "search_queries": {
+      "type": "array",
+      "items":{"type": "string"},
+      "description": "List of generated search queries"
     }
   },
   "required": ["search_query"]

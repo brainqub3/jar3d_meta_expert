@@ -131,10 +131,10 @@ async def start():
 
     # Vllm
     # agent_kwargs = {
-    #     "model": "meta-llama/Meta-Llama-3.1-70B-Instruct",
+    #     "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
     #     "server": "vllm",
     #     "temperature": 0.1,
-    #     "model_endpoint": "https://dow9w19ap6gjhl-8000.proxy.runpod.net/",
+    #     "model_endpoint": "https://b1xkdmrlxy9q8s-8000.proxy.runpod.net/",
     # }
 
 
@@ -174,7 +174,7 @@ def run_workflow(state):
     checkpointer = MemorySaver()
     workflow = graph.compile(checkpointer)
 
-    recursion_limit = 10
+    recursion_limit = 4
     state["recursion_limit"] = recursion_limit
     state["user_input"] = "/start"
     configs = {"recursion_limit": recursion_limit + 10, "configurable": {"thread_id": 42}}
