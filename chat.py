@@ -134,7 +134,7 @@ async def start():
     #     "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
     #     "server": "vllm",
     #     "temperature": 0.1,
-    #     "model_endpoint": "https://b1xkdmrlxy9q8s-8000.proxy.runpod.net/",
+    #     "model_endpoint": "https://u49y6kqdjj877q-8000.proxy.runpod.net/",
     # }
 
 

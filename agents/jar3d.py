@@ -2,22 +2,20 @@ import json
 import textwrap
 import re
 import logging
+from multiprocessing import Pool, cpu_count
 from termcolor import colored
-from datetime import datetime
 from typing import Any, Dict, Union, List
 from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages
 from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
-from tools.rag_tool import rag_tool
-from tools.advanced_scraper import scraper
 from tools.google_serper import serper_search
 from utils.logging import log_function, setup_logging
-from utils.message_handling import get_ai_message_contents
 from tools.offline_rag_tool import run_rag
 from prompt_engineering.guided_json_lib import (
     guided_json_search_query, 
-    guided_json_best_url, 
+    guided_json_best_url,
+    guided_json_best_url_two,
     guided_json_router_decision, 
     guided_json_parse_expert
 )
@@ -129,7 +127,7 @@ class Jar3d(BaseAgent[State]):
         user_input = f"previous conversation: {history}\n {system_prompt}\n cogor {user_input}"
 
         while True:
-            history = self.get_conv_history(state)
+            # history = self.get_conv_history(state)
             state = self.invoke(state=state, user_input=user_input)
             response = state['requirements_gathering'][-1]["content"]
             response = re.sub(r'^```python[\s\S]*?```\s*', '', response, flags=re.MULTILINE)
@@ -234,11 +232,6 @@ class MetaExpert(BaseAgent[State]):
             final_answer = (base_message + "\n") * (extra_recursions + 1)
         else:
             final_answer = None
-
-        # if (recursions >= lower_limit_recursions and recursions <= upper_limit_recursions) or recursions > upper_limit_recursions :
-        #     final_answer = "**You are being explicitly told to produce your [Type 2] work now!**"
-        # else:
-        #     final_answer = None
 
         requirements = state['requirements_gathering'][-1].content
         formatted_requirements = '\n\n'.join(re.findall(r'```python\s*([\s\S]*?)\s*```', requirements, re.MULTILINE))
@@ -362,6 +355,106 @@ class NoToolExpert(BaseAgent[State]):
         return state
     
 
+class NoToolExpert(BaseAgent[State]):
+    def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
+                 model_endpoint: str = None, stop: str = None):
+        super().__init__(model, server, temperature, model_endpoint, stop)
+        self.llm = self.get_llm(json_model=False)
+
+    def get_prompt(self, state) -> str:
+        # print(f"\nn{state}\n")
+        system_prompt = state["meta_prompt"][-1].content
+        return system_prompt
+        
+    def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
+
+        # meta_prompts = state.get("meta_prompt", [])
+        associated_meta_prompt = state["meta_prompt"][-1].content
+        parse_expert = self.get_llm(json_model=True)
+
+        parse_expert_prompt = """
+        You must parse the expert from the text. The expert will be one of the following.
+        1. Expert Planner
+        2. Expert Writer
+        Return your response as the following JSON
+        {{"expert": "Expert Planner" or "Expert Writer"}}
+        """
+
+        input = [
+                {"role": "user", "content": associated_meta_prompt},
+                {"role": "assistant", "content": f"system_prompt:{parse_expert_prompt}"}
+
+            ]
+
+
+        retries = 0
+        associated_expert = None
+
+        while retries < 4 and associated_expert is None:
+            retries += 1    
+            if self.server == 'vllm':
+                guided_json = guided_json_parse_expert
+                parse_expert_response = parse_expert.invoke(input, guided_json)
+            else:
+                parse_expert_response = parse_expert.invoke(input)
+
+            associated_expert_json = json.loads(parse_expert_response)
+            associated_expert = associated_expert_json.get("expert")
+
+        # associated_expert = parse_expert_text(associated_meta_prompt)
+        print(colored(f"\n\n Expert: {associated_expert}\n\n", 'green'))
+
+        if associated_expert == "Expert Planner":
+            expert_update_key = "expert_plan"
+        if associated_expert == "Expert Writer":
+            expert_update_key = "expert_writing"
+            
+
+        updates_conversation_history = {
+            "conversation_history": [
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": f"{str(response)}"}
+
+            ],
+            expert_update_key: {"role": "assistant", "content": f"{str(response)}"}
+
+        }
+
+
+        return updates_conversation_history
+    
+    def get_conv_history(self, state: State) -> str:
+        pass
+    
+    def get_user_input(self) -> str:
+        pass
+    
+    def get_guided_json(self, state: State) -> Dict[str, Any]:
+        pass
+
+    def use_tool(self) -> Any:
+        pass
+
+
+    # @log_function(logger)
+    def run(self, state: State) -> State:
+        # chat_counter(state)
+        all_expert_research = []
+        meta_prompt = state["meta_prompt"][1].content
+
+        if state.get("expert_research"):
+            expert_research = state["expert_research"]
+            all_expert_research.extend(expert_research)
+            research_prompt = f"\n Your response must be delivered considering following research.\n ## Research\n {all_expert_research} "
+            user_input = f"{meta_prompt}\n{research_prompt}"
+
+        else:
+            user_input = meta_prompt
+
+        state = self.invoke(state=state, user_input=user_input)        
+        return state
+    
+
 class ToolExpert(BaseAgent[State]):
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
                  model_endpoint: str = None, stop: str = None):
@@ -373,12 +466,10 @@ class ToolExpert(BaseAgent[State]):
         return system_prompt
         
     def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
-
         updates_conversation_history = {
             "conversation_history": [
                 {"role": "user", "content": user_input},
                 {"role": "assistant", "content": f"{str(response)}"}
-
             ],
             "expert_research": {"role": "assistant", "content": f"{str(response)}"}
         }
@@ -401,22 +492,15 @@ class ToolExpert(BaseAgent[State]):
             results = run_rag(urls=tool_input, query=query)
             return results
 
-    # @log_function(logger)
-    def run(self, state: State) -> State:
-
-        # counter = chat_counter(state)
-
+    def generate_search_queries(self, meta_prompt: str, num_queries: int = 5) -> List[str]:
         refine_query_template = """
         # Objective
         Your mission is to systematically address your manager's instructions by determining 
-        the most appropriate search query to use in the Google search engine.
-        You use a flexible search algorithm to do this.
+        the most appropriate search queries to use in the Google search engine.
+        You will generate {num_queries} different search queries.
 
-        # Manger's Instructions
+        # Manager's Instructions
         {manager_instructions}
-
-        # Your Previous Search Queries
-        {previous_search_queries}
 
         # Flexible Search Algorithm for Simple and Complex Questions
 
@@ -425,116 +509,121 @@ class ToolExpert(BaseAgent[State]):
             - For a complex topic: "[Main topic] overview"
 
             2. For each subsequent search:
-            - You can only see the previous search query, not the current one.
-            - Choose one of these strategies based on the previous query:
+            - Choose one of these strategies:
 
             a. Specify:
-                Add a more specific term or aspect related to the previous query.
+                Add a more specific term or aspect related to the topic.
 
             b. Broaden:
-                Remove a specific term or add "general" or "overview" to the previous query.
+                Remove a specific term or add "general" or "overview" to the query.
 
             c. Pivot:
-                Choose a different but related term from the previous query.
+                Choose a different but related term from the topic.
 
             d. Compare:
                 Add "vs" or "compared to" along with a related term.
 
             e. Question:
-                Rephrase the previous query as a question by adding "what", "how", "why", etc.
-
-            3. Every 5 searches:
-            - Return to the original question or main topic to reset the search path.
-
-            4. Continue until you believe you've covered the topic sufficiently or reached a set number of searches.
+                Rephrase the query as a question by adding "what", "how", "why", etc.
 
         # Response Format
 
         **Return the following JSON:**
-        {{"search_query": Algorithmically refined search query.}}
+        {{
+            "search_queries": [
+                "Query 1",
+                "Query 2",
+                ...
+                "Query {num_queries}"
+            ]
+        }}
 
         Remember:
-        - You cannot see or recall any search results.
-        - You can only see the immediately preceding search query, not the current one.
-        - Each new search must be based solely on the terms used in your previous search.
-        - Adjust your strategy based on whether you're addressing a simple question or exploring a complex topic.
-            """
+        - Generate {num_queries} unique and diverse search queries.
+        - Each query should explore a different aspect or approach to the topic.
+        - Ensure the queries cover various aspects of the manager's instructions.
+        """
 
+        refine_query = self.get_llm(json_model=True)
+        refine_prompt = refine_query_template.format(manager_instructions=meta_prompt, num_queries=num_queries)
+        input = [
+            {"role": "user", "content": "Generate search queries"},
+            {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
+        ]
+        
+        guided_json = guided_json_search_query
+
+        if self.server == 'vllm':
+            refined_queries = refine_query.invoke(input, guided_json)
+        else:
+            refined_queries = refine_query.invoke(input)
+
+        refined_queries_json = json.loads(refined_queries)
+        return refined_queries_json.get("search_queries", [])
+
+    def process_serper_result(self, args):
+        query, serper_response = args
         best_url_template = """
-            Given the serper results, and the instructions from your manager. Select the best URL
+            Given the serper results, and the search query, select the best URL
 
-            # Manger Instructions
-            {manager_instructions}
+            # Search Query
+            {search_query}
 
             # Serper Results
             {serper_results}
 
             **Return the following JSON:**
 
-
-            {{"best_url": The URL of the serper results that aligns most with the instructions from your manager.,
-            "pdf": A boolean value indicating whether the URL is a PDF or not. This should be True if the URL is a PDF, and False otherwise.}}
-
+            {{"best_url": The URL of the serper results that aligns most with the search query.}}
         """
+
+        best_url = self.get_llm(json_model=True)
+        best_url_prompt = best_url_template.format(search_query=query, serper_results=serper_response)
+        input = [
+            {"role": "user", "content": serper_response},
+            {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
+        ]
+        
+        guided_json = guided_json_best_url_two
+
+        if self.server == 'vllm':
+            best_url = best_url.invoke(input, guided_json)
+        else:
+            best_url = best_url.invoke(input)
+
+        best_url_json = json.loads(best_url)
+        return best_url_json.get("best_url")
+
+    def run(self, state: State) -> State:
         meta_prompt = state["meta_prompt"][-1].content
+        print(colored(f"\n\n Meta-Prompt: {meta_prompt}\n\n", 'green'))
 
-        iterations = 0
-        urls = []
-        max_iterations = 5
+        # Generate multiple search queries
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=20)
+        print(colored(f"\n\n Generated Search Queries: {search_queries}\n\n", 'green'))
 
-        while iterations <= max_iterations:
-            iterations += 1
-            previous_search_queries = state.get("previous_search_queries", [])
-            refine_query = self.get_llm(json_model=True)
-            refine_prompt = refine_query_template.format(manager_instructions=meta_prompt, previous_search_queries=previous_search_queries)
-            input = [
-                    {"role": "user", "content": "Get the search query"},
-                    {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
-                ]
-            
-            if self.server == 'vllm':
-                guided_json = guided_json_search_query
-                refined_query = refine_query.invoke(input, guided_json)
-            else:
-                refined_query = refine_query.invoke(input)
+        try:
+            # Use multiprocessing to call Serper tool for each query in parallel
+            with Pool(processes=min(cpu_count(), len(search_queries))) as pool:
+                serper_results = pool.starmap(self.use_tool, [("serper", query) for query in search_queries])
 
-            refined_query_json = json.loads(refined_query)
-            refined_query = refined_query_json.get("search_query")
-
-            print(colored(f"\n\n Refined Search Query: {refined_query}\n\n", 'green'))
-
-            state["previous_search_queries"] = refined_query
-            serper_response = self.use_tool("serper", refined_query)
-
-            best_url = self.get_llm(json_model=True)
-            best_url_prompt = best_url_template.format(manager_instructions=refined_query, serper_results=serper_response)
-            input = [
-                    {"role": "user", "content": serper_response},
-                    {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
-
-                ]
-            
-            if self.server == 'vllm':
-                guided_json = guided_json_best_url
-                best_url = best_url.invoke(input, guided_json)
-            else:
-                best_url = best_url.invoke(input)
-
-            best_url_json = json.loads(best_url)
-            best_url = best_url_json.get("best_url")
-
-            if best_url:
-                urls.append(best_url)
+            # Process Serper results to get best URLs
+            with Pool(processes=min(cpu_count(), len(serper_results))) as pool:
+                best_urls = pool.map(self.process_serper_result, zip(search_queries, serper_results))
+        except Exception as e:
+            print(colored(f"Error in multithreaded processing: {str(e)}. Falling back to non-multithreaded approach.", "yellow"))
+            # Fallback to non-multithreaded approach
+            serper_results = [self.use_tool("serper", query) for query in search_queries]
+            best_urls = [self.process_serper_result((query, result)) for query, result in zip(search_queries, serper_results)]
 
         # Remove duplicates from the list of URLs
-        unique_urls = list(dict.fromkeys(urls))
+        unique_urls = list(dict.fromkeys(url for url in best_urls if url))
 
         print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'green'))
         for i, url in enumerate(unique_urls, 1):
             print(colored("  {}. {}".format(i, url), 'green'))
-        print()  # A
+        print()
 
-        meta_prompt = state["meta_prompt"][-1].content
         scraper_response = self.use_tool("rag", tool_input=unique_urls, query=meta_prompt)
         updates = self.process_response(scraper_response, user_input="Research")
 
@@ -660,12 +749,12 @@ if __name__ == "__main__":
     # }
 
     # Vllm
-    # agent_kwargs = {
-    #     "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
-    #     "server": "vllm",
-    #     "temperature": 0,
-    #     "model_endpoint": "https://j72ip7q799tpr8-8000.proxy.runpod.net/",
-    # }
+    agent_kwargs = {
+        "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+        "server": "vllm",
+        "temperature": 0.1,
+        "model_endpoint": "https://u49y6kqdjj877q-8000.proxy.runpod.net/",
+    }
 
     tools_router_agent_kwargs = agent_kwargs.copy()
     tools_router_agent_kwargs["temperature"] = 0

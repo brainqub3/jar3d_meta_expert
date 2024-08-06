@@ -431,7 +431,6 @@ class ToolExpert(BaseAgent[State]):
         
         guided_json = guided_json_search_query
 
-        # try:
         if self.server == 'vllm':
             refined_queries = refine_query.invoke(input, guided_json)
         else:
@@ -465,7 +464,6 @@ class ToolExpert(BaseAgent[State]):
         
         guided_json = guided_json_best_url_two
 
-        # try:
         if self.server == 'vllm':
             best_url = best_url.invoke(input, guided_json)
         else:
@@ -479,7 +477,7 @@ class ToolExpert(BaseAgent[State]):
         print(colored(f"\n\n Meta-Prompt: {meta_prompt}\n\n", 'green'))
 
         # Generate multiple search queries
-        search_queries = self.generate_search_queries(meta_prompt, num_queries=5)
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=20)
         print(colored(f"\n\n Generated Search Queries: {search_queries}\n\n", 'green'))
 
         try:
