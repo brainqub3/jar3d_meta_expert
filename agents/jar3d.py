@@ -749,12 +749,12 @@ if __name__ == "__main__":
     # }
 
     # Vllm
-    agent_kwargs = {
-        "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
-        "server": "vllm",
-        "temperature": 0.1,
-        "model_endpoint": "https://u49y6kqdjj877q-8000.proxy.runpod.net/",
-    }
+    # agent_kwargs = {
+    #     "model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+    #     "server": "vllm",
+    #     "temperature": 0.1,
+    #     "model_endpoint": "https://u49y6kqdjj877q-8000.proxy.runpod.net/",
+    # }
 
     tools_router_agent_kwargs = agent_kwargs.copy()
     tools_router_agent_kwargs["temperature"] = 0
