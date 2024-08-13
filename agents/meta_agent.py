@@ -207,7 +207,7 @@ class ToolExpert(BaseAgent[State]):
 
     def use_tool(self, mode: str, tool_input: str, doc_type: str = None) -> Any:
         if mode == "serper":
-            results = serper_search(tool_input)
+            results = serper_search(tool_input, self.location)
             return results
         elif mode == "scraper":
             results = scraper(tool_input, doc_type)

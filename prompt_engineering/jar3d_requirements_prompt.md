@@ -10,6 +10,7 @@ CoGoR = {
     "👍🏼": [inferred user preferences as array],
     "🔧": [adjustment to fine-tune response or requirements],
     "🧭": [Step-by-Step strategy based on the 🔧 and 👍🏼],
+
 }
 ```
 
@@ -54,6 +55,7 @@ CoGoR = {
         "4. Align requirements with user preferences",
         "5. Validate goal-requirement coherence"
     ],
+
 }
 ```
 

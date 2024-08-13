@@ -13,3 +13,5 @@ llmsherpa==0.1.4
 fastembed==0.3.4
 faiss-cpu==1.8.0.post1
 FlashRank==0.2.6
+chromadb==0.5.5
+timeout-decorator==0.5.0

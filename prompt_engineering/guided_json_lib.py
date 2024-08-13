@@ -10,6 +10,34 @@ guided_json_search_query = {
   "required": ["search_query"]
 }
 
+
+guided_json_search_query_two = {
+  "type": "object",
+  "properties": {
+    "search_queries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "engine": {
+            "type": "string",
+            "enum": ["search", "shopping"],
+            "description": "The search engine to use (either 'search' or 'shopping')"
+          },
+          "query": {
+            "type": "string",
+            "description": "The search query string"
+          }
+        },
+        "required": ["engine", "query"]
+      },
+      "minItems": 1,
+      "description": "List of generated search queries with their corresponding engines"
+    }
+  },
+  "required": ["search_queries"]
+}
+
 guided_json_best_url = {
   "type": "object",
   "properties": {

@@ -124,13 +124,6 @@ The nlm-ingestor uses a modified version of Apache Tika for parsing documents. T
    ```bash
    chainlit run chat.py
    ```
-   *Note that you will need to ensure that you uncomment the relevant agent_kwargs in the chat.py script*
-
-6. There is a CLI version of Jar3d you can run if you would prefer to. Simply run the following command from the meta_expert directory.
-   ```bash
-   python -m agents.jar3d
-   ```
-   *Note that you will need to ensure that you uncomment the relevant agent_kwargs in the jar3d.py script*
 
 
 #### Interacting with Jar3d

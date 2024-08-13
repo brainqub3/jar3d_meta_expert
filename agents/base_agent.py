@@ -11,6 +11,7 @@ from models.llms import (
     GeminiModel,
     ClaudeModel,
     VllmModel,
+    MistralModel
 )
 
 # Set up logging
@@ -22,13 +23,14 @@ StateT = TypeVar('StateT', bound=Dict[str, Any])
 
 class BaseAgent(ABC, Generic[StateT]):
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
-                 model_endpoint: str = None, stop: str = None):
+                 model_endpoint: str = None, stop: str = None, location: str = "us"):
         self.model = model
         self.server = server
         self.temperature = temperature
         self.model_endpoint = model_endpoint
         self.stop = stop
         self.llm = self.get_llm()
+        self.location = location
 
     
     def get_llm(self, json_model: bool = False):
@@ -43,8 +45,12 @@ class BaseAgent(ABC, Generic[StateT]):
             return GroqModel(model=self.model, temperature=self.temperature, json_response=json_model)
         elif self.server == 'claude':
             return ClaudeModel(temperature=self.temperature, model=self.model, json_response=json_model)
+        elif self.server == 'mistral':
+            return MistralModel(temperature=self.temperature, model=self.model, json_response=json_model)
         elif self.server == 'gemini':
+            # raise ValueError(f"Unsupported server: {self.server}")
             return GeminiModel(temperature=self.temperature, model=self.model,  json_response=json_model)
+        else:
             raise ValueError(f"Unsupported server: {self.server}")
 
     @abstractmethod
@@ -88,7 +94,7 @@ class BaseAgent(ABC, Generic[StateT]):
 
         messages = [
             {"role": "system", "content": f"{prompt}\n Today's date is {datetime.now()}"},
-            {"role": "user", "content": f"\n{final_answer} \n{conversation_history}\n <requirements>{user_input}</requirements>"}
+            {"role": "user", "content": f"\n{final_answer}\n{final_answer}\n{final_answer}\n{conversation_history}\n{user_input}"}
         ]
 
         if self.server == 'vllm':
