@@ -265,7 +265,7 @@ class OllamaModel(BaseModel):
     def __init__(self, temperature: float, model: str, json_response: bool, max_retries: int = 3, retry_delay: int = 1):
         super().__init__(temperature, model, json_response, max_retries, retry_delay)
         self.headers = {"Content-Type": "application/json"}
-        self.model_endpoint = "http://localhost:11434/api/generate"
+        self.model_endpoint = os.getenv("OLLAMA_HOST") + "/api/generate"
 
     def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
