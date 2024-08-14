@@ -6,9 +6,10 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - LLM_SHERPA_SERVER=http://nlm-ingestor:5001/api/parseDocument?renderFormat=all
-      - OLLAMA_URL=http://host.docker.internal:11434
+    # Env is currently injected from config/config.yaml  
+    # environment:
+    #   - LLM_SHERPA_SERVER=http://nlm-ingestor:5001/api/parseDocument?renderFormat=all
+    #   - OLLAMA_HOST=http://host.docker.internal:11434 
     depends_on:
       - nlm-ingestor
     volumes:
