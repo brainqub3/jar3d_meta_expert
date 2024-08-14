@@ -62,20 +62,48 @@ This project leverages three core concepts:
    pip install -r requirements.txt
    ```
 
-## API Key Configuration
+## Configuration
 
-1. **Open the `config.yaml` file:**
+1. **Create your `config.yaml` file:**
 
    ```bash
-   nano config.yaml
+   cp config/config.example.yaml config/config.yaml
    ```
 
-2. **Enter API Keys:**
-   - **Serper API Key:** Get it from [https://serper.dev/](https://serper.dev/)
-   - **OpenAI API Key:** Get it from [https://openai.com/](https://openai.com/)
-   - **Gemini API Key:** Get it from [https://ai.google.dev/gemini-api](https://ai.google.dev/gemini-api)
-   - **Claude API Key:** Get it from [https://docs.anthropic.com/en/api/getting-started](https://docs.anthropic.com/en/api/getting-started)
-   - **Groq API Key:** Get it from [https://console.groq.com/keys](https://console.groq.com/keys)
+2. **Open the `config.yaml` file:**
+
+   ```bash
+   nano config/config.yaml
+   ```
+
+### API Key Configuration
+
+Enter API Keys:
+
+- **Serper API Key:** Get it from [https://serper.dev/](https://serper.dev/)
+- **OpenAI API Key:** Get it from [https://openai.com/](https://openai.com/)
+- **Gemini API Key:** Get it from [https://ai.google.dev/gemini-api](https://ai.google.dev/gemini-api)
+- **Claude API Key:** Get it from [https://docs.anthropic.com/en/api/getting-started](https://docs.anthropic.com/en/api/getting-started)
+- **Groq API Key:** Get it from [https://console.groq.com/keys](https://console.groq.com/keys)
+
+### Endpoints Configuration
+
+Set the `LLM_SERVER` variable to choose your inference provider. Possible values are:
+
+- openai
+- mistral
+- claude
+- ollama
+- groq
+- vllm
+
+Example:
+
+```yaml
+LLM_SERVER: ollama
+```
+
+Remember to keep your `config.yaml` file private as it contains sensitive information.
 
 ## Setup for Basic Meta Agent
 
