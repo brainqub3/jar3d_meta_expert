@@ -1,6 +1,7 @@
 import re
 import time
 import asyncio
+import os
 import chainlit as cl
 from typing import Dict, Any
 from langgraph.graph import StateGraph
@@ -21,8 +22,8 @@ from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
 
 
-server = "claude"
-recursion_limit = 8
+server = os.getenv("META_EXPERT_SERVER", "claude")
+recursion_limit = os.getenv("META_EXPERT_RECURSION_LIMIT", 8)
 
 def get_agent_kwargs(server: str = "claude", location: str = None) -> Dict[str, Any]:
 
