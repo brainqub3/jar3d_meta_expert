@@ -1,3 +1,4 @@
 /config/config.yaml
-__pycache__
+__pycache__/
+*.pyc
 /.vscode
