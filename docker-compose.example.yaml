@@ -1,0 +1,19 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  jar3d:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_SHERPA_SERVER=http://nlm-ingestor:5001/api/parseDocument?renderFormat=all
+    depends_on:
+      - nlm-ingestor
+    volumes:
+      - ./config:/app/config
+
+  nlm-ingestor:
+    image: jamesmtc/nlm-ingestor:latest
+    ports:
+      - "5010:5001"
