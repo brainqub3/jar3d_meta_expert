@@ -9,6 +9,8 @@ def load_config(file_path):
         'GEMINI_API_KEY': 'default_gemini_api_key',
         'GROQ_API_KEY': 'default_groq_api_key',
         'LLM_SERVER': 'claude',
+        'OLLAMA_HOST': 'http://localhost:11434',
+        'OLLAMA_MODEL:': 'phi3:instruct'
 
     }
     

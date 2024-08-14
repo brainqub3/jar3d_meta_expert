@@ -56,7 +56,7 @@ def get_agent_kwargs(server: str = "claude", location: str = None) -> Dict[str, 
 
     elif server == "ollama":
         agent_kwargs = {
-            "model": "phi3:instruct",
+            "model": os.environ.get("OLLAMA_MODEL"),
             "server": "ollama",
             "temperature": 0.1,
         }

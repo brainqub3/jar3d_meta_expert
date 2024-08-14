@@ -10,4 +10,9 @@ LLM_SHERPA_SERVER: http://localhost:5010/api/parseDocument?renderFormat=all&useN
 # Possible values : claude, mistral, openai, ollama, groq, vllm
 LLM_SERVER: 
 
+# For Docker, use http://host.docker.internal:11434
+# For local, use http://localhost:11434
 OLLAMA_HOST: 
+# Ollama Model name used by the Ollama server. Will be automatically pulled if not present.
+# Example : phi3:instruct
+OLLAMA_MODEL: 
