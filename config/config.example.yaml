@@ -9,3 +9,5 @@ LLM_SHERPA_SERVER: http://localhost:5010/api/parseDocument?renderFormat=all&useN
 # LLM Server to use 
 # Possible values : claude, mistral, openai, ollama, groq, vllm
 LLM_SERVER: 
+
+OLLAMA_URL: 
