@@ -21,7 +21,7 @@ from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
 
 
-server = "claude"
+server = os.environ.get("LLM_SERVER")
 recursion_limit = 8
 
 def get_agent_kwargs(server: str = "claude", location: str = None) -> Dict[str, Any]:

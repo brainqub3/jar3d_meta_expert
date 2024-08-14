@@ -8,6 +8,8 @@ def load_config(file_path):
         'CLAUDE_API_KEY': 'default_claude_api_key',
         'GEMINI_API_KEY': 'default_gemini_api_key',
         'GROQ_API_KEY': 'default_groq_api_key',
+        'LLM_SERVER': 'claude',
+
     }
     
     with open(file_path, 'r') as file:

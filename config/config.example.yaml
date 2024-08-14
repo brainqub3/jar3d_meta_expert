@@ -5,3 +5,7 @@ OPENAI_API_KEY:
 MISTRAL_API_KEY: 
 SERPER_API_KEY: 
 LLM_SHERPA_SERVER: http://localhost:5010/api/parseDocument?renderFormat=all&useNewIndentParser=yes
+
+# LLM Server to use 
+# Possible values : claude, mistral, openai, ollama, groq, vllm
+LLM_SERVER: 
