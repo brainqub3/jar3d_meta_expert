@@ -54,7 +54,7 @@ This project leverages three core concepts:
 ## API Key Configuration
 1. **Open the `config.yaml` file:**
    ```bash
-   nano config.yaml
+   nano config/config.yaml
    ```
 
 2. **Enter API Keys:**
