@@ -44,7 +44,7 @@ class BaseAgent(ABC, Generic[StateT]):
         elif self.server == 'groq':
             return GroqModel(model=self.model, temperature=self.temperature, json_response=json_model)
         elif self.server == 'claude':
-            return ClaudeModel(temperature=self.temperature, model=self.model, json_response=json_model)
+            return GroqModel(temperature=self.temperature, model=self.model, json_response=json_model)
         elif self.server == 'mistral':
             return MistralModel(temperature=self.temperature, model=self.model, json_response=json_model)
         elif self.server == 'gemini':

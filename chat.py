@@ -21,10 +21,11 @@ from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
 
 
-server = "claude"
+server = "groq"
 recursion_limit = 8
+GROQ_CONSTRAINTS =" No chit-chat, tokens are expensive. Do not exceed 4500 tokens/min as you carry out your life saving task."
 
-def get_agent_kwargs(server: str = "claude", location: str = None) -> Dict[str, Any]:
+def get_agent_kwargs(server: str = "groq", location: str = None) -> Dict[str, Any]:
 
     if not location:
         location = "us"
@@ -48,8 +49,9 @@ def get_agent_kwargs(server: str = "claude", location: str = None) -> Dict[str, 
     
     elif server == "claude":
         agent_kwargs = {
-            "model": "claude-3-5-sonnet-20240620",
-            "server": "claude",
+            "model": "llama3.1-405b-reasoning",
+            # "model": "llama3-groq-70b-8192-tool-use-preview",
+            "server": "groq",
             "temperature": 0,
         }
 

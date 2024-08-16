@@ -26,6 +26,8 @@ from prompt_engineering.guided_json_lib import (
 setup_logging(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+GROQ_CONSTRAINTS =" No chit-chat, tokens are expensive. Do not exceed 4500 tokens/min as you carry out your life saving task."
+
 class MessageDict(TypedDict):
     role: str
     content: str

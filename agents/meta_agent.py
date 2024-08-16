@@ -16,6 +16,8 @@ from prompt_engineering.guided_json_lib import guided_json_search_query, guided_
 setup_logging(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+GROQ_CONSTRAINTS =" No chit-chat, tokens are expensive. Do not exceed 4500 tokens/min as you carry out your life saving task."
+
 class MessageDict(TypedDict):
     role: str
     content: str
@@ -398,9 +400,9 @@ if __name__ == "__main__":
 
     # For Claude
     agent_kwargs = {
-        "model": "claude-3-5-sonnet-20240620",
-        "server": "claude",
-        "temperature": 0.5
+        "model": "llama3-groq-70b-8192-tool-use-preview",
+            "server": "groq",
+            "temperature": 0,
     }
 
     # For OpenAI
