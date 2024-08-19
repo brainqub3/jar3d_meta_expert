@@ -118,7 +118,7 @@ class Jar3d(BaseAgent[State]):
 
     def get_prompt(self, state: State = None) -> str:
         system_prompt = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
-        return system_prompt
+        return system_prompt + GROQ_CONSTRAINTS
         
     def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[Dict[str, str]]]:
         updates_conversation_history = {

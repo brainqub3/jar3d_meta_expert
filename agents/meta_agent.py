@@ -95,7 +95,7 @@ class MetaExpert(BaseAgent[State]):
 
     def get_prompt(self, state:None) -> str:
         system_prompt = read_markdown_file('prompt_engineering/meta_prompt.md')
-        return system_prompt
+        return system_prompt + GROQ_CONSTRAINTS
         
     def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, List[MessageDict]]:
         user_input = None
