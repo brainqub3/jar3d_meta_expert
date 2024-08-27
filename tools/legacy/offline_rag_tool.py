@@ -209,8 +209,11 @@ def run_rag(urls: List[str], query: str) -> List[Dict[str, str]]:
         chunks_list = [future.result() for future in concurrent.futures.as_completed(futures)]
     
     # Flatten the list of lists into a single corpus
-    corpus = [chunk for chunks in chunks_list for chunk in chunks]
+    # corpus = [chunk for chunks in chunks_list for chunk in chunks]
+    corpus = [item for sublist in chunks_list for item in sublist]
+
     print(colored(f"\n\nTotal documents in corpus after chunking: {len(corpus)}\n\n", "green"))
+    # print(colored(f"\n\n DEBUG Corpus: {corpus}\n\n", "green"))
     
     ranked_docs = index_and_rank(corpus, query)
     return ranked_docs

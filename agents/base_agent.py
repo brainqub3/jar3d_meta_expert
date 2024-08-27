@@ -23,7 +23,7 @@ StateT = TypeVar('StateT', bound=Dict[str, Any])
 
 class BaseAgent(ABC, Generic[StateT]):
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
-                 model_endpoint: str = None, stop: str = None, location: str = "us"):
+                 model_endpoint: str = None, stop: str = None, location: str = "us", hyrbid: bool = False):
         self.model = model
         self.server = server
         self.temperature = temperature
@@ -31,6 +31,7 @@ class BaseAgent(ABC, Generic[StateT]):
         self.stop = stop
         self.llm = self.get_llm()
         self.location = location
+        self.hybrid = hyrbid
 
     
     def get_llm(self, json_model: bool = False):
@@ -94,7 +95,7 @@ class BaseAgent(ABC, Generic[StateT]):
 
         messages = [
             {"role": "system", "content": f"{prompt}\n Today's date is {datetime.now()}"},
-            {"role": "user", "content": f"\n{final_answer}\n{final_answer}\n{final_answer}\n{conversation_history}\n{user_input}"}
+            {"role": "user", "content": f"\n{final_answer}\n" * 10 + f"{conversation_history}\n{user_input}"}
         ]
 
         if self.server == 'vllm':

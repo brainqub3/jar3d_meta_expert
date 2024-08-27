@@ -24,7 +24,7 @@ from utils.read_markdown import read_markdown_file
 server = "claude"
 recursion_limit = 8
 
-def get_agent_kwargs(server: str = "claude", location: str = None) -> Dict[str, Any]:
+def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool = False) -> Dict[str, Any]:
 
     if not location:
         location = "us"
@@ -85,6 +85,7 @@ def get_agent_kwargs(server: str = "claude", location: str = None) -> Dict[str, 
 
     agent_kwargs_tools = agent_kwargs.copy()
     agent_kwargs_tools["location"] = location
+    agent_kwargs_tools["hybrid"] = hybrid
 
     return agent_kwargs, agent_kwargs_tools
 
@@ -142,14 +143,23 @@ async def update_settings(settings):
     gl = location_dict.get(location, 'us')
     cl.user_session.set("gl", gl)
 
-    agent_kwargs, agent_kwargs_tools = get_agent_kwargs(server, gl)
+    retrieval_mode = settings["retrieval_mode"]
+
+    if retrieval_mode == "Hybrid (Graph + Dense)":
+        hybrid = True
+    else:
+        hybrid = False
+
+    cl.user_session.set("hybrid", hybrid)
+    
+    agent_kwargs, agent_kwargs_tools = get_agent_kwargs(server, gl, hybrid)
     cl.user_session.set("agent_kwargs", agent_kwargs)
     cl.user_session.set("agent_kwargs_tools", agent_kwargs_tools)
 
     workflow = build_workflow()
     cl.user_session.set("workflow", workflow)
 
-    await cl.Message(content=f"I'll be conducting any Internet searches from {location}", author="Jar3d👩‍💻").send()
+    await cl.Message(content=f"I'll be conducting any Internet searches from {location} with {retrieval_mode}", author="Jar3d👩‍💻").send()
 
 
 
@@ -171,6 +181,7 @@ async def start():
     "chat_finished": False,
     "recursion_limit": None,
     "final_answer": None,
+    "previous_type2_work": []
     }
 
     cl.user_session.set("state", state)
@@ -185,17 +196,31 @@ async def start():
                     "The United Kingdom",
                     "The Netherlands",
                     "Canada",
-                ]
-            ),      
+                ],
+                initial_index=0
+            ),
+            Select(
+                id="retrieval_mode",
+                label="Select retrieval mode:",
+                values=[
+                    "Hybrid (Graph + Dense)",
+                    "Dense Only",
+                ],
+                initial_index=1,
+                description="The retrieval mode determines how Jar3d and searches and indexes information from the internet. Hybrid mode performs a deeper search but will cost more."
+            )
+
         ]
     ).send()
 
     try:
         gl = cl.user_session.get("gl")
+        hybrid = cl.user_session.get("hybrid")
     except Exception as e:
         gl = "us"
+        hybrid = False
         
-    agent_kwargs, agent_kwargs_tools = get_agent_kwargs(server, gl)
+    agent_kwargs, agent_kwargs_tools = get_agent_kwargs(server, gl, hybrid)
     cl.user_session.set("agent_kwargs", agent_kwargs)
     cl.user_session.set("agent_kwargs_tools", agent_kwargs_tools)
 

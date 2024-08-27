@@ -13,7 +13,7 @@ from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
 from tools.google_serper import serper_search, serper_shopping_search
 from utils.logging import log_function, setup_logging
-from tools.offline_graph_rag_tool import run_rag
+from tools.offline_rag_tool import run_rag
 from prompt_engineering.guided_json_lib import (
     guided_json_search_query, 
     guided_json_best_url_two, 
@@ -45,7 +45,6 @@ class State(TypedDict):
     chat_finished: bool
     recursion_limit: int
     final_answer: str
-    previous_type2_work: Annotated[List[str], add_messages]
 
 state: State = {
     "meta_prompt": [],
@@ -61,8 +60,7 @@ state: State = {
     "chat_limit": None,
     "chat_finished": False,
     "recursion_limit": None,
-    "final_answer": None,
-    "previous_type2_work": []
+    "final_answer": None
 }
 
 def chat_counter(state: State) -> State:
@@ -372,8 +370,8 @@ class NoToolExpert(BaseAgent[State]):
 
 class ToolExpert(BaseAgent[State]):
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
-                 model_endpoint: str = None, stop: str = None, location: str = None, hybrid: bool = False):
-        super().__init__(model, server, temperature, model_endpoint, stop, location, hybrid)
+                 model_endpoint: str = None, stop: str = None, location: str = None):
+        super().__init__(model, server, temperature, model_endpoint, stop, location)
 
         print(f"\n\n DEBUG LOCATION: {self.location}")
 
@@ -402,8 +400,7 @@ class ToolExpert(BaseAgent[State]):
     def get_guided_json(self, state: State) -> Dict[str, Any]:
         pass
 
-    # Change added query list to RAG
-    def use_tool(self, mode: str, engine: str, tool_input: str, meta_prompt: str = None, query: list[str] = None, hybrid: bool = False) -> Any:
+    def use_tool(self, mode: str, engine: str, tool_input: str, query: str = None) -> Any:
         if mode == "serper":
             if engine == "search":
                 results = serper_search(tool_input, self.location)
@@ -412,18 +409,7 @@ class ToolExpert(BaseAgent[State]):
                 results = serper_shopping_search(tool_input, self.location)
                 return {"results": results, "is_shopping": True}
         elif mode == "rag":
-            print(colored(f"\n\n DEBUG: We are running the Graph RAG TOOL!!\n\n", 'red'))
-
-            # if hybrid:
-            #     nodes, relationships = self.get_graph_elements(meta_prompt)
-            #     print(colored(f"\n\n DEBUG: Nodes: {nodes}\n\n", 'green'))
-            #     print(colored(f"\n\n DEBUG: Relationships: {relationships}\n\n", 'green'))
-            # else:
-            nodes = None
-            relationships = None
-            print(colored(f"\n\n DEBUG Retreival Mode: {hybrid}\n\n", 'green'))
-            results = run_rag(urls=tool_input, allowed_nodes=nodes, allowed_relationships=relationships, query=query, hybrid=self.hybrid)
-
+            results = run_rag(urls=tool_input, query=query)
             return {"results": results, "is_shopping": False}
 
     def generate_search_queries(self, meta_prompt: str, num_queries: int = 5) -> List[str]:
@@ -497,7 +483,7 @@ class ToolExpert(BaseAgent[State]):
         refined_queries_json = json.loads(refined_queries)
         return refined_queries_json.get("search_queries", [])
 
-    def process_serper_result(self, query, serper_response ): # Add to other Jar3d Script
+    def process_serper_result(self, query, serper_response ):
         best_url_template = """
             Given the serper results, and the search query, select the best URL
 
@@ -531,63 +517,12 @@ class ToolExpert(BaseAgent[State]):
         return {"query": query, "url": best_url_json.get("best_url")}
         # return best_url_json.get("best_url")
 
-    def get_graph_elements(self, meta_prompt: str):
-        graph_elements_template = """
-            You are an intelligent assistant helping to construct elements for a knowledge graph in Neo4j.
-            Your objectove is to create two lists.
-
-            # Lists
-            list 1: A list of nodes.
-            list 2: A list of relationships.
-
-            # Instructions Constructing Lists
-            1. You must construct lists based on what would be most useful for exploring data
-            to fulfil the [Manager's Instructions].
-            2. Each item in your list must follow Neo4j's formattng standards.
-            3. Limit lists to a maximum of 8 items each.
-
-            # Neo4j Formatting Standards
-            1. Each element in the list must be in capital letters.
-            2. Spaces between words must be replaced with underscores.
-            3. There should be no apostrophes or special characters.
-
-            # [Manager's Instructions]
-            {manager_instructions}
-
-            Return the following JSON:
-            {{ "nodes": [list of nodes], "relationships": [list of relationships]}}
-
-        """
-
-        get_graph_elements = self.get_llm(json_model=True)
-        graph_elements_prompt = graph_elements_template.format(manager_instructions=meta_prompt)
-
-        input = [
-            {"role": "user", "content": "Construct Neo4j Graph Elements"},
-            {"role": "assistant", "content": f"system_prompt:{graph_elements_prompt}"}
-        ]
-        
-        guided_json = guided_json_best_url_two
-
-        if self.server == 'vllm':
-            graph_elements = get_graph_elements.invoke(input, guided_json)
-        else:
-            graph_elements = get_graph_elements.invoke(input)
-
-        graph_elements_json = json.loads(graph_elements)
-
-        nodes = graph_elements_json.get("nodes")
-        relationships = graph_elements_json.get("relationships")
-
-        return nodes, relationships
-
     def run(self, state: State) -> State:
         meta_prompt = state["meta_prompt"][-1].content
         print(colored(f"\n\n Meta-Prompt: {meta_prompt}\n\n", 'green'))
 
         # Generate multiple search queries
-        num_queries = 10
-        search_queries = self.generate_search_queries(meta_prompt, num_queries=num_queries)
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=5)
         print(colored(f"\n\n Generated Search Queries: {search_queries}\n\n", 'green'))
 
         try:
@@ -620,23 +555,17 @@ class ToolExpert(BaseAgent[State]):
                 state["expert_research_shopping"] = shopping_results
             best_urls = [self.process_serper_result(query, result) for query, result in zip(search_queries, serper_results)]
 
-        # Remove duplicates from the list of URLs # Additional Line
-        deduplicated_urls = {item['url']: item for item in best_urls}.values()
-        deduplicated_urls_list = list(deduplicated_urls)
-
-        print(colored(f"\n\n  DEBUG DEBUG Best URLs: {deduplicated_urls_list}\n\n", 'red')) # DEBUG LINE 
+        # Remove duplicates from the list of URLs
         unique_urls = list(dict.fromkeys(result["url"] for result in best_urls if result["url"] and result["query"]["engine"] == "search"))
-        unique_queries = list(dict.fromkeys(result["query"]["query"] for result in deduplicated_urls_list if result["query"] and result["query"]["engine"] == "search"))        # unique_urls = list(dict.fromkeys(url for url in best_urls if url))
-        
-        print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'yellow'))
-        print(colored(f"\n\n Search Queries {unique_queries}", 'yellow'))
+        # unique_urls = list(dict.fromkeys(url for url in best_urls if url))
 
+        print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'green'))
         for i, url in enumerate(unique_urls, 1):
             print(colored("  {}. {}".format(i, url), 'green'))
         print()
 
         try:
-            scraper_response = self.use_tool(mode="rag", engine=None, tool_input=unique_urls, meta_prompt=meta_prompt, query=unique_queries)
+            scraper_response = self.use_tool("rag", engine=None, tool_input=unique_urls, query=meta_prompt)
         except Exception as e:
             scraper_response = {"results": f"Error {e}: Failed to scrape results", "is_shopping": False}
 

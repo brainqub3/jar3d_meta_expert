@@ -1,7 +1,9 @@
-langchain-core==0.2.4
-langgraph==0.0.64
-langchain-community==0.2.3
-langchain-openai==0.1.8
+langchain-core==0.2.33
+langgraph==0.2.4
+langchain-experimental==0.0.64
+langchain-community==0.2.12
+langchain-openai==0.1.22
+langchain-anthropic==0.1.23
 beautifulsoup4==4.12.3
 termcolor==2.4.0
 chainlit==1.1.202
@@ -15,3 +17,4 @@ faiss-cpu==1.8.0.post1
 FlashRank==0.2.6
 chromadb==0.5.5
 timeout-decorator==0.5.0
+neo4j==5.23.1
