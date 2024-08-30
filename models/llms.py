@@ -21,6 +21,7 @@ class BaseModel:
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(1), retry=retry_if_exception_type(requests.RequestException))
     def _make_request(self, url, headers, payload):
+        time.sleep(0.7) #GROQ request throttle
         response = requests.post(url, headers=headers, data=json.dumps(payload))
         response.raise_for_status()
         return response.json()

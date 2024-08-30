@@ -90,5 +90,6 @@ def serper_shopping_search(query: str, location: str) -> str:
 # Example usage
 if __name__ == "__main__":
     search_query = "NVIDIA RTX 6000"
-    results = serper_search(search_query)
+    location = "https://www.google.com/search"
+    results = serper_search( search_query, location)
     print(results)

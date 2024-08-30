@@ -1,7 +1,7 @@
-CLAUDE_API_KEY: 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
+CLAUDE_API_KEY:
 GEMINI_API_KEY: 
 GROQ_API_KEY: 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
 OPENAI_API_KEY: 
 MISTRAL_API_KEY: 
-SERPER_API_KEY: 
+SERPER_API_KEY: 6b8ec43d11c1320b6d3c1494a8560cbf60f0c5c7
 LLM_SHERPA_SERVER: http://localhost:5010/api/parseDocument?renderFormat=all&useNewIndentParser=yes

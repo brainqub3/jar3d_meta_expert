@@ -377,7 +377,6 @@ class Router(BaseAgent[State]):
         input = [
                 {"role": "user", "content": ""},
                 {"role": "assistant", "content": f"system_prompt:{system_prompt}"}
-
             ]
         router = self.get_llm(json_model=True)
 
@@ -398,7 +397,7 @@ if __name__ == "__main__":
     from langgraph.graph import StateGraph
 
 
-    # For Claude
+    # For Groq
     agent_kwargs = {
         "model": "llama3-groq-70b-8192-tool-use-preview",
             "server": "groq",
@@ -475,7 +474,7 @@ if __name__ == "__main__":
             break
 
         # current_time = datetime.now()
-        recursion_limit = 40
+        recursion_limit = 19
         state["recursion_limit"] = recursion_limit
         state["user_input"] = query
         limit = {"recursion_limit": recursion_limit}
