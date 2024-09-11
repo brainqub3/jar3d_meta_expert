@@ -104,27 +104,27 @@ This project leverages three core concepts:
 
 ## API Key Configuration
 
+## API Key Configuration
+
 1. **Open the `config.yaml` file:**
 
-   ```bash
+```bash
 
-   nano config.yaml
+nano config/config.yaml
 
-   ```
-
-  
+```
 
 2. **Enter API Keys:**
 
-   - **Serper API Key:** Get it from [https://serper.dev/](https://serper.dev/)
+- **SERPER_API_KEY:** Get it from [https://serper.dev/](https://serper.dev/)
 
-   - **OpenAI API Key:** Get it from [https://openai.com/](https://openai.com/)
+- **OPENAI_API_KEY:** Get it from [https://openai.com/](https://openai.com/)
 
-   - **Gemini API Key:** Get it from [https://ai.google.dev/gemini-api](https://ai.google.dev/gemini-api)
+- **GEMINI_API_KEY:** Get it from [https://ai.google.dev/gemini-api](https://ai.google.dev/gemini-api)
 
-   - **Claude API Key:** Get it from [https://docs.anthropic.com/en/api/getting-started](https://docs.anthropic.com/en/api/getting-started)
+- **ANTHROPIC_API_KEY:** Get it from [https://docs.anthropic.com/en/api/getting-started](https://docs.anthropic.com/en/api/getting-started)
 
-   - **Groq API Key:** Get it from [https://console.groq.com/keys](https://console.groq.com/keys)
+- **GROQ_API_KEY:** Get it from [https://console.groq.com/keys](https://console.groq.com/keys)
 
   
 
