@@ -265,9 +265,39 @@ class OllamaModel(BaseModel):
     def __init__(self, temperature: float, model: str, json_response: bool, max_retries: int = 3, retry_delay: int = 1):
         super().__init__(temperature, model, json_response, max_retries, retry_delay)
         self.headers = {"Content-Type": "application/json"}
-        self.model_endpoint = "http://localhost:11434/api/generate"
+        self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.model_endpoint = f"{self.ollama_host}/api/generate"
+
+    def _check_and_pull_model(self):
+        # Check if the model exists
+        response = requests.get(f"{self.ollama_host}/api/tags")
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            if not any(model["name"] == self.model for model in models):
+                print(f"Model {self.model} not found. Pulling the model...")
+                self._pull_model()
+            else:
+                print(f"Model {self.model} is already available.")
+        else:
+            print(f"Failed to check models. Status code: {response.status_code}")
+
+    def _pull_model(self):
+        pull_endpoint = f"{self.ollama_host}/api/pull"
+        payload = {"name": self.model}
+        response = requests.post(pull_endpoint, json=payload, stream=True)
+        
+        if response.status_code == 200:
+            for line in response.iter_lines():
+                if line:
+                    status = json.loads(line.decode('utf-8'))
+                    print(f"Pulling model: {status.get('status')}")
+            print(f"Model {self.model} pulled successfully.")
+        else:
+            print(f"Failed to pull model. Status code: {response.status_code}")
 
     def invoke(self, messages: List[Dict[str, str]]) -> str:
+        self._check_and_pull_model()  # Check and pull the model if necessary
+
         system = messages[0]["content"]
         user = messages[1]["content"]
 
@@ -295,7 +325,6 @@ class OllamaModel(BaseModel):
             return json.dumps({"error": f"Error in invoking model after {self.max_retries} retries: {str(e)}"})
         except json.JSONDecodeError as e:
             return json.dumps({"error": f"Error processing response: {str(e)}"})
-
 class VllmModel(BaseModel):
     def __init__(self, temperature: float, model: str, model_endpoint: str, json_response: bool, stop: str = None, max_retries: int = 5, retry_delay: int = 1):
         super().__init__(temperature, model, json_response, max_retries, retry_delay)
@@ -373,8 +402,23 @@ class OpenAIModel(BaseModel):
         system = messages[0]["content"]
         user = messages[1]["content"]
 
-        payload = {
+        if self.model == "o1-preview" or self.model == "o1-mini":
+
+            payload = {
             "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"{system}\n\n{user}"
+                }
+            ],
+            "stream": False,
+            "temperature": self.temperature,
+        }
+
+        else:
+            payload = {
+                "model": self.model,
             "messages": [
                 {
                     "role": "system",

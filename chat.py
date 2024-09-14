@@ -1,11 +1,12 @@
-import re
-import time
+import os
+# import re
+# import time
 import asyncio
 import chainlit as cl
 from typing import Dict, Any
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import MemorySaver
-from termcolor import colored
+# from termcolor import colored
 from typing import Union
 from chainlit.input_widget import Select
 from agents.jar3d_agent import (State, 
@@ -19,10 +20,14 @@ from agents.jar3d_agent import (State,
                           )
 from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
+from config.load_configs import load_config
 
 
-server = "claude"
-recursion_limit = 8
+config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.yaml')
+load_config(config_path)
+
+server = os.environ.get("LLM_SERVER")
+recursion_limit = int(os.environ.get("RECURSION_LIMIT"))
 
 def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool = False) -> Dict[str, Any]:
 
@@ -33,10 +38,12 @@ def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool 
 
     if server == "openai":
         agent_kwargs = {
-        "model": "gpt-4o",
+        "model": "gpt-4o-mini",
         "server": "openai",
         "temperature": 0,
         }
+        agent_kwargs_meta_expert = agent_kwargs.copy()
+        agent_kwargs_meta_expert["model"] = "gpt-4o"
 
     # Mistral 
     elif server == "mistral":
@@ -45,6 +52,7 @@ def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool 
             "server": "mistral",
             "temperature": 0,
         }
+        agent_kwargs_meta_expert = agent_kwargs.copy()
     
     elif server == "claude":
         agent_kwargs = {
@@ -52,13 +60,15 @@ def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool 
             "server": "claude",
             "temperature": 0,
         }
+        agent_kwargs_meta_expert = agent_kwargs.copy()
 
     elif server == "ollama":
         agent_kwargs = {
-            "model": "phi3:instruct",
+            "model": os.environ.get("OLLAMA_MODEL"),
             "server": "ollama",
             "temperature": 0.1,
         }
+        agent_kwargs_meta_expert = agent_kwargs.copy()
 
     elif server == "groq":
         agent_kwargs = {
@@ -66,13 +76,7 @@ def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool 
             "server": "groq",
             "temperature": 0,
         }
-
-    # elif server == "gemini":
-    #     agent_kwargs = {
-    #         "model": "gemini-1.5-pro",
-    #         "server": "gemini",
-    #         "temperature": 0.1,
-    #     }
+        agent_kwargs_meta_expert = agent_kwargs.copy()
 
     # you must change the model and model_endpoint to the correct values
     elif server == "vllm":
@@ -82,12 +86,13 @@ def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool 
             "temperature": 0.2,
             "model_endpoint": "https://s1s4l1lhce486j-8000.proxy.runpod.net/",
         }
+        agent_kwargs_meta_expert = agent_kwargs.copy()
 
     agent_kwargs_tools = agent_kwargs.copy()
     agent_kwargs_tools["location"] = location
     agent_kwargs_tools["hybrid"] = hybrid
 
-    return agent_kwargs, agent_kwargs_tools
+    return agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert
 
 class Jar3dIntro(BaseAgent[State]):
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
@@ -151,15 +156,16 @@ async def update_settings(settings):
         hybrid = False
 
     cl.user_session.set("hybrid", hybrid)
-    
-    agent_kwargs, agent_kwargs_tools = get_agent_kwargs(server, gl, hybrid)
+
+    agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert = get_agent_kwargs(server, gl, hybrid)
     cl.user_session.set("agent_kwargs", agent_kwargs)
     cl.user_session.set("agent_kwargs_tools", agent_kwargs_tools)
+    cl.user_session.set("agent_kwargs_meta_expert", agent_kwargs_meta_expert)
 
     workflow = build_workflow()
     cl.user_session.set("workflow", workflow)
 
-    await cl.Message(content=f"I'll be conducting any Internet searches from {location} with {retrieval_mode}", author="Jar3d👩‍💻").send()
+    await cl.Message(content=f"I'll be conducting any Internet searches from {location}", author="Jar3d👩‍💻").send()
 
 
 
@@ -196,9 +202,8 @@ async def start():
                     "The United Kingdom",
                     "The Netherlands",
                     "Canada",
-                ],
-                initial_index=0
-            ),
+                ]
+            ), 
             Select(
                 id="retrieval_mode",
                 label="Select retrieval mode:",
@@ -220,9 +225,10 @@ async def start():
         gl = "us"
         hybrid = False
         
-    agent_kwargs, agent_kwargs_tools = get_agent_kwargs(server, gl, hybrid)
+    agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert = get_agent_kwargs(server, gl, hybrid)
     cl.user_session.set("agent_kwargs", agent_kwargs)
     cl.user_session.set("agent_kwargs_tools", agent_kwargs_tools)
+    cl.user_session.set("agent_kwargs_meta_expert", agent_kwargs_meta_expert)
 
     workflow = build_workflow()
 
@@ -247,12 +253,11 @@ def build_workflow():
 
     agent_kwargs = cl.user_session.get("agent_kwargs")
     agent_kwargs_tools = cl.user_session.get("agent_kwargs_tools")
+    agent_kwargs_meta_expert = cl.user_session.get("agent_kwargs_meta_expert")
 
-    # tools_router_agent_kwargs = agent_kwargs.copy()
-    # tools_router_agent_kwargs["temperature"] = 0
 
     graph = StateGraph(State)
-    graph.add_node("meta_expert", lambda state: MetaExpert(**agent_kwargs).run(state=state))
+    graph.add_node("meta_expert", lambda state: MetaExpert(**agent_kwargs_meta_expert).run(state=state))
     graph.add_node("router", lambda state: Router(**agent_kwargs).run(state=state))
     graph.add_node("no_tool_expert", lambda state: NoToolExpert(**agent_kwargs).run(state=state))
     graph.add_node("tool_expert", lambda state: ToolExpert(**agent_kwargs_tools).run(state=state))

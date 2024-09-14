@@ -47,7 +47,17 @@ Sentence embedding models come in two flavours, [bi-encoders and cross-encoders]
 * Bi-Encoders: Produce separate sentence embedding  for each input text. They are **faster** but **less accurate** than cross encoders. Useful for semantic search, or Information retrieval due to the efficiency,
 * Cross-Encoders: Process pairs of sentences together to produce a similarity score. They are **slower**, but **more accurate** than bi-encoders. Use For small pre-defined data sets, cross encoders can be useful.
 
-It's common practice to combine bi-encoders and cross-encoders in a multi-stage approach. The bi-encoders will help produce the initial retrieval candidates. The cross encoders are used to re-rank top candidates for higher accuracy. 
+It's common practice to combine bi-encoders and cross-encoders in a multi-stage approach. The bi-encoders will help produce the initial retrieval candidates. The cross encoders are used to re-rank top candidates for higher accuracy.
+
+### Knowledge Graph Retrieval
+
+In Hybrid Mode, Jar3d creates a Neo4j knowledge graph from the ingested documents. We have found that combining KG retrieval with RAG improves it's ability to answer more complex queries.
+
+We leverage an [LLM Graph Transformer](https://api.python.langchain.com/en/latest/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html) to create a knowledge graph from the documents.
+
+We query the knowlede graph using Cypher Query Language to isolate the most relevant relationhips and nodes. This retireved context is fed into the LLM alongside the context retrievd from the similarity search and reranking with the cross-encoder.
+
+[![Agentic RAG Video](https://img.youtube.com/vi/R5_dCmieOiM/0.jpg)](https://youtu.be/R5_dCmieOiM?feature=shared)
 
 ### Tooling
 

@@ -72,7 +72,8 @@ def deduplicate_results(results, rerank=True):
 
 def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, batch_size: int = 25) -> List[Dict[str, str]]:
     print(colored(f"\n\nStarting indexing and ranking with FastEmbeddings and FAISS for {len(corpus)} documents\n\n", "green"))
-    embeddings = FastEmbedEmbeddings(model_name='jinaai/jina-embeddings-v2-small-en', max_length=512)
+    CACHE_DIR = "/app/fastembed_cache"
+    embeddings = FastEmbedEmbeddings(model_name='jinaai/jina-embeddings-v2-small-en', max_length=512, cache_dir=CACHE_DIR)
 
     print(colored("\n\nCreating FAISS index...\n\n", "green"))
 
@@ -160,7 +161,8 @@ def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, 
 
         print(colored("\n\nRe-ranking documents...\n\n", "green"))
         # Change: reranker done based on query in metadata
-        ranker = Ranker(cache_dir=tempfile.mkdtemp())
+        CACHE_DIR_RANKER = "/app/reranker_cache"
+        ranker = Ranker(cache_dir=CACHE_DIR_RANKER)
         results = []
         processed_queries = set()
 
@@ -362,7 +364,7 @@ def create_graph_index(
 
 def run_rag(urls: List[str], allowed_nodes: list[str] = None, allowed_relationships: list[str] = None, query: List[str] = None, hybrid: bool = False) -> List[Dict[str, str]]:
     # Change: adapted to take query and url as input.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(urls), 3)) as executor:  
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(urls), 5)) as executor:  
             futures = [executor.submit(intelligent_chunking, url, query) for url, query in zip(urls, query)]
             chunks_list = [future.result() for future in concurrent.futures.as_completed(futures)]
     
@@ -388,22 +390,22 @@ def run_rag(urls: List[str], allowed_nodes: list[str] = None, allowed_relationsh
 
     return retrieved_context
 
-if __name__ == "__main__":
-    # For testing purposes.
-    url1 = "https://ai.meta.com/blog/meta-llama-3-1/"
-    url2 = "https://mistral.ai/news/mistral-large-2407/"
-    # url3 = "https://developers.googleblog.com/en/new-features-for-the-gemini-api-and-google-ai-studio/"
+# if __name__ == "__main__":
+#     # For testing purposes.
+#     url1 = "https://ai.meta.com/blog/meta-llama-3-1/"
+#     url2 = "https://mistral.ai/news/mistral-large-2407/"
+#     # url3 = "https://developers.googleblog.com/en/new-features-for-the-gemini-api-and-google-ai-studio/"
 
-    # query = "cheapest macbook"
+#     # query = "cheapest macbook"
 
-    # urls = [url1, url2, url3]
-    urls = [url1, url2]
-    query = ["What's the size of the Llama 3.1 modles?", "What are the features of the Mistral models?"]
-    allowed_nodes = None
-    allowed_relationships = None
-    hybrid = True
-    results = run_rag(urls, allowed_nodes=allowed_nodes, allowed_relationships=allowed_relationships, query=query, hybrid=hybrid)
+#     # urls = [url1, url2, url3]
+#     urls = [url1, url2]
+#     query = ["What's the size of the Llama 3.1 modles?", "What are the features of the Mistral models?"]
+#     allowed_nodes = None
+#     allowed_relationships = None
+#     hybrid = True
+#     results = run_rag(urls, allowed_nodes=allowed_nodes, allowed_relationships=allowed_relationships, query=query, hybrid=hybrid)
 
-    print(colored(f"\n\n RESULTS: {results}", "green"))
+#     print(colored(f"\n\n RESULTS: {results}", "green"))
 
     # print(f"\n\n RESULTS: {results}")

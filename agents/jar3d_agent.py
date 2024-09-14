@@ -172,7 +172,12 @@ class MetaExpert(BaseAgent[State]):
                 {"role": "user", "content": f"{user_input}"},
                 {"role": "assistant", "content": str(response)}
 
-            ]
+            ],
+            "conversation_history": [
+                {"role": "user", "content": f"{user_input}"},
+                {"role": "assistant", "content": str(response)}
+
+            ],
         }
         return updates_conversation_history
     
@@ -271,6 +276,7 @@ class MetaExpert(BaseAgent[State]):
     
 
 class NoToolExpert(BaseAgent[State]):
+    print(colored(f"\n\n DEBUG: We are running the NoToolExpert tool\n\n", 'red'))
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
                  model_endpoint: str = None, stop: str = None):
         super().__init__(model, server, temperature, model_endpoint, stop)
@@ -366,11 +372,13 @@ class NoToolExpert(BaseAgent[State]):
         else:
             user_input = meta_prompt
 
+        print(colored(f"\n\n DEBUG: We are running the NoToolExpert tool\n\n", 'red'))
         state = self.invoke(state=state, user_input=user_input)        
         return state
     
 
 class ToolExpert(BaseAgent[State]):
+    print(colored(f"\n\n DEBUG: We are running the ToolExpert tool\n\n", 'red'))
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
                  model_endpoint: str = None, stop: str = None, location: str = None, hybrid: bool = False):
         super().__init__(model, server, temperature, model_endpoint, stop, location, hybrid)
@@ -492,6 +500,7 @@ class ToolExpert(BaseAgent[State]):
         if self.server == 'vllm':
             refined_queries = refine_query.invoke(input, guided_json)
         else:
+            print(colored(f"\n\n DEBUG: We are running the refine_query tool without vllm\n\n", 'red'))
             refined_queries = refine_query.invoke(input)
 
         refined_queries_json = json.loads(refined_queries)
@@ -524,6 +533,7 @@ class ToolExpert(BaseAgent[State]):
         if self.server == 'vllm':
             best_url = best_url.invoke(input, guided_json)
         else:
+            print(colored(f"\n\n DEBUG: We are running the best_url tool without vllm\n\n", 'red'))
             best_url = best_url.invoke(input)
 
         best_url_json = json.loads(best_url)
@@ -572,6 +582,7 @@ class ToolExpert(BaseAgent[State]):
         if self.server == 'vllm':
             graph_elements = get_graph_elements.invoke(input, guided_json)
         else:
+            print(colored(f"\n\n DEBUG: We are running the graph_elements tool without vllm\n\n", 'red'))
             graph_elements = get_graph_elements.invoke(input)
 
         graph_elements_json = json.loads(graph_elements)

@@ -1,0 +1,13 @@
+# /config/config.yaml
+__pycache__/
+*.pyc
+/.vscode
+# /docker-compose.yaml
+
+# Ignore all files in fastembed_cache except .gitkeep
+fastembed_cache/*
+!fastembed_cache/.gitkeep
+
+# Ignore all files in reranker_cache except .gitkeep
+reranker_cache/*
+!reranker_cache/.gitkeep

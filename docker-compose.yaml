@@ -1,0 +1,27 @@
+# docker-compose.yml
+version: '2.4'  # Use version 2.x for this syntax
+
+services:
+  jar3d:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1  # Ensure Python output is not buffered
+      - LLM_SHERPA_SERVER=http://nlm-ingestor:5001/api/parseDocument?renderFormat=all&useNewIndentParser=yes
+    depends_on:
+      - nlm-ingestor
+    volumes:
+      - ./config:/app/config
+      - ./fastembed_cache:/app/fastembed_cache
+      - ./reranker_cache:/app/reranker_cache
+    # environment:
+    #   - PYTHONUNBUFFERED=1  # Ensure Python output is not buffered
+    #   - LLM_SHERPA_SERVER=http://nlm-ingestor:5001/api/parseDocument?renderFormat=all&useNewIndentParser=yes
+    mem_limit: 7.5g
+    cpus: 5.0
+
+  nlm-ingestor:
+    image: brainqub3/nlm-ingestor:latest
+    ports:
+      - "5010:5001"
