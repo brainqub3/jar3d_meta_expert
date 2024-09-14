@@ -25,8 +25,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Ensure the config file is copied to the correct location
-COPY config/config.yaml /app/config/config.yaml
-
+# COPY config/config.yaml /app/config/config.yaml
+COPY config/config.yaml /config/config.yaml
 
 # Expose the port Chainlit runs on
 EXPOSE 8000
