@@ -2,7 +2,7 @@
 LLM_SERVER: claude
 
 # 2)  Set your LLM API Keys - For Hyrbid Retreival You need to set Claude alongside your LLM_SERVER
-ANTHROPIC_API_KEY:
+ANTHROPIC_API_KEY: 
 GEMINI_API_KEY: 
 GROQ_API_KEY: 
 OPENAI_API_KEY: 

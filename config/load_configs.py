@@ -12,7 +12,7 @@ def load_config(config_path):
         
         for key, value in config.items():
             os.environ[key] = str(value)
-            logger.debug(f"Set environment variable: {key}={value} (type: {type(value)})")
+            # logger.debug(f"Set environment variable: {key}={value} (type: {type(value)})")
         
         logger.info("Configuration loaded successfully")
     except Exception as e:

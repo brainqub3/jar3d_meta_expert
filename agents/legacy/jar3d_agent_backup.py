@@ -2,7 +2,6 @@ import json
 from multiprocessing import Pool, cpu_count
 # import requests
 # from tenacity import RetryError
-import concurrent.futures  # Add this import at the top of your file
 import re
 import logging
 import chainlit as cl
@@ -384,7 +383,7 @@ class ToolExpert(BaseAgent[State]):
                  model_endpoint: str = None, stop: str = None, location: str = None, hybrid: bool = False):
         super().__init__(model, server, temperature, model_endpoint, stop, location, hybrid)
 
-        # print(f"\n\n DEBUG LOCATION: {self.location}")
+        print(f"\n\n DEBUG LOCATION: {self.location}")
 
         self.llm = self.get_llm(json_model=False)
 
@@ -411,6 +410,7 @@ class ToolExpert(BaseAgent[State]):
     def get_guided_json(self, state: State) -> Dict[str, Any]:
         pass
 
+    # Change added query list to RAG
     def use_tool(self, mode: str, engine: str, tool_input: str, meta_prompt: str = None, query: list[str] = None, hybrid: bool = False) -> Any:
         if mode == "serper":
             if engine == "search":
@@ -434,15 +434,12 @@ class ToolExpert(BaseAgent[State]):
 
             return {"results": results, "is_shopping": False}
 
-    def generate_search_queries(self, meta_prompt: str, num_queries: int = 5) -> List[Dict[str, str]]:
-
-        print(colored(f"\n\n DEBUG: We are running the generate_search_queries tool\n\n", 'red'))
-        
+    def generate_search_queries(self, meta_prompt: str, num_queries: int = 5) -> List[str]:
         refine_query_template = """
         # Objective
         Your mission is to systematically address your manager's instructions by determining 
         the most appropriate search queries to use **AND** to determine the best engine to use for each query.
-        Your engine choice is either "search" or "shopping". You must return either "search" or "shopping" for each query.
+        Your engine choice is either search, or shopping. You must return either the search or shopping engine for each query.
         You will generate {num_queries} different search queries.
 
         # Manager's Instructions
@@ -493,7 +490,7 @@ class ToolExpert(BaseAgent[State]):
 
         refine_query = self.get_llm(json_model=True)
         refine_prompt = refine_query_template.format(manager_instructions=meta_prompt, num_queries=num_queries)
-        input_data = [
+        input = [
             {"role": "user", "content": "Generate search queries"},
             {"role": "assistant", "content": f"system_prompt:{refine_prompt}"}
         ]
@@ -501,20 +498,17 @@ class ToolExpert(BaseAgent[State]):
         guided_json = guided_json_search_query_two
 
         if self.server == 'vllm':
-            refined_queries = refine_query.invoke(input_data, guided_json)
+            refined_queries = refine_query.invoke(input, guided_json)
         else:
             print(colored(f"\n\n DEBUG: We are running the refine_query tool without vllm\n\n", 'red'))
-            refined_queries = refine_query.invoke(input_data)
+            refined_queries = refine_query.invoke(input)
 
         refined_queries_json = json.loads(refined_queries)
         return refined_queries_json.get("search_queries", [])
 
-    def process_serper_result(self, query: Dict[str, str], serper_response: Dict[str, Any]) -> Dict[str, Any]:
-
-        print(colored(f"\n\n DEBUG: We are running the process_serper_result tool\n\n", 'red'))
-
+    def process_serper_result(self, query, serper_response ): # Add to other Jar3d Script
         best_url_template = """
-            Given the Serper results and the search query, select the best URL.
+            Given the serper results, and the search query, select the best URL
 
             # Search Query
             {search_query}
@@ -524,12 +518,12 @@ class ToolExpert(BaseAgent[State]):
 
             **Return the following JSON:**
 
-            {{"best_url": The URL from the Serper results that aligns most with the search query.}}
+            {{"best_url": The URL of the serper results that aligns most with the search query.}}
         """
 
         best_url = self.get_llm(json_model=True)
         best_url_prompt = best_url_template.format(search_query=query["query"], serper_results=serper_response)
-        input_data = [
+        input = [
             {"role": "user", "content": serper_response},
             {"role": "assistant", "content": f"system_prompt:{best_url_prompt}"}
         ]
@@ -537,196 +531,123 @@ class ToolExpert(BaseAgent[State]):
         guided_json = guided_json_best_url_two
 
         if self.server == 'vllm':
-            best_url = best_url.invoke(input_data, guided_json)
+            best_url = best_url.invoke(input, guided_json)
         else:
             print(colored(f"\n\n DEBUG: We are running the best_url tool without vllm\n\n", 'red'))
-            best_url = best_url.invoke(input_data)
+            best_url = best_url.invoke(input)
 
         best_url_json = json.loads(best_url)
 
         return {"query": query, "url": best_url_json.get("best_url")}
+        # return best_url_json.get("best_url")
 
-    def analyze_and_refine_queries(self, serper_results: List[Dict[str, Any]], meta_prompt: str) -> List[Dict[str, str]]:
-        """
-        Analyzes the search results and generates refined search queries.
-        """
+    def get_graph_elements(self, meta_prompt: str):
+        graph_elements_template = """
+            You are an intelligent assistant helping to construct elements for a knowledge graph in Neo4j.
+            Your objectove is to create two lists.
 
-        print(colored(f"\n\n DEBUG: We are running the analyze_and_refine_queries tool\n\n", 'red'))
+            # Lists
+            list 1: A list of nodes.
+            list 2: A list of relationships.
 
-        observations = []
-        for result in serper_results:
-            results_content = result.get("results", {})
-            if result.get("is_shopping"):
-                # Handle shopping results if necessary
-                shopping_results = results_content.get("shopping_results", [])
-                snippets = [f"{item.get('title', '')} - {item.get('price', '')}" for item in shopping_results]
-            else:
-                # Handle organic search results
-                organic_results = results_content.get("organic_results", [])
-                snippets = [item.get("snippet", "") for item in organic_results]
-            observations.extend(snippets)
+            # Instructions Constructing Lists
+            1. You must construct lists based on what would be most useful for exploring data
+            to fulfil the [Manager's Instructions].
+            2. Each item in your list must follow Neo4j's formattng standards.
+            3. Limit lists to a maximum of 8 items each.
 
-        analysis_prompt_template = """
-        Based on the following search results, generate new search queries to further investigate the topic.
+            # Neo4j Formatting Standards
+            1. Each element in the list must be in capital letters.
+            2. Spaces between words must be replaced with underscores.
+            3. There should be no apostrophes or special characters.
 
-        # Search Results
-        {observations}
+            # [Manager's Instructions]
+            {manager_instructions}
 
-        # Manager's Instructions
-        {meta_prompt}
+            Return the following JSON:
+            {{ "nodes": [list of nodes], "relationships": [list of relationships]}}
 
-        # Guidelines
-        - Identify gaps or missing information in the current search results.
-        - Generate queries that could fill these gaps or provide deeper insight.
-        - Provide diverse and relevant queries.
-
-        Provide the new search queries in a JSON format:
-        {{
-            "search_queries": [
-                {{"engine": "search", "query": "New Query 1"}},
-                {{"engine": "shopping", "query": "New Query 2"}},
-                ...
-            ]
-        }}
         """
 
-        analysis_prompt = analysis_prompt_template.format(
-            observations="\n".join(observations),
-            meta_prompt=meta_prompt
-        )
+        get_graph_elements = self.get_llm(json_model=True)
+        graph_elements_prompt = graph_elements_template.format(manager_instructions=meta_prompt)
 
-        analysis_llm = self.get_llm(json_model=True)
-        input_data = [
-            {"role": "user", "content": "Analyze and refine search queries"},
-            {"role": "assistant", "content": f"system_prompt:{analysis_prompt}"}
+        input = [
+            {"role": "user", "content": "Construct Neo4j Graph Elements"},
+            {"role": "assistant", "content": f"system_prompt:{graph_elements_prompt}"}
         ]
-
-        guided_json = guided_json_search_query_two
+        
+        guided_json = guided_json_best_url_two
 
         if self.server == 'vllm':
-            refined_queries = analysis_llm.invoke(input_data, guided_json)
+            graph_elements = get_graph_elements.invoke(input, guided_json)
         else:
-            print(colored("\n\n DEBUG: We are running the analysis without vllm\n\n", 'red'))
-            refined_queries = analysis_llm.invoke(input_data)
+            print(colored(f"\n\n DEBUG: We are running the graph_elements tool without vllm\n\n", 'red'))
+            graph_elements = get_graph_elements.invoke(input)
 
-        refined_queries_json = json.loads(refined_queries)
-        return refined_queries_json.get("search_queries", [])
+        graph_elements_json = json.loads(graph_elements)
+
+        nodes = graph_elements_json.get("nodes")
+        relationships = graph_elements_json.get("relationships")
+
+        return nodes, relationships
 
     def run(self, state: State) -> State:
         meta_prompt = state["meta_prompt"][-1].content
         print(colored(f"\n\n Meta-Prompt: {meta_prompt}\n\n", 'green'))
 
-        # Set up iterative search parameters
-        max_iterations = 5  # Define a maximum number of iterations to prevent infinite loops
-        iteration = 0
+        # Generate multiple search queries
+        num_queries = 10
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=num_queries)
+        print(colored(f"\n\n Generated Search Queries: {search_queries}\n\n", 'green'))
 
-        # Initial search queries
-        search_queries = self.generate_search_queries(meta_prompt, num_queries=5)
-        all_serper_results = []
-        all_best_urls = []
+        try:
+            # Use multiprocessing to call Serper tool for each query in parallel
+            with Pool(processes=min(cpu_count(), len(search_queries))) as pool:
+                serper_results = pool.starmap(
+                    self.use_tool, 
+                    [("serper", query["engine"], query["query"], None) for query in search_queries]
+                )
 
-        while iteration < max_iterations:
-            print(colored(f"\n\n Iteration {iteration + 1}\n\n", 'yellow'))
-            iteration += 1
+            # Collect shopping results separately
+            shopping_results = [result["results"] for result in serper_results if result["is_shopping"]]
 
-            # Use ThreadPoolExecutor to call Serper tool for each query in parallel
-            try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(search_queries), 5)) as executor:
-                    future_to_query = {
-                        executor.submit(
-                            self.use_tool,
-                            "serper",
-                            query["engine"],
-                            query["query"],
-                            None
-                        ): query for query in search_queries
-                    }
-                    serper_results = []
-                    for future in concurrent.futures.as_completed(future_to_query):
-                        query = future_to_query[future]
-                        try:
-                            result = future.result()
-                            serper_results.append(result)
-                        except Exception as exc:
-                            print(colored(f"Error processing query {query}: {exc}", 'red'))
-                            serper_results.append(None)
-            except Exception as e:
-                print(colored(f"Error in threading: {str(e)}. Falling back to non-parallel processing.", 'red'))
-                serper_results = [self.use_tool("serper", query["engine"], query["query"], None) for query in search_queries]
-
-            # Collect and store all results
-            all_serper_results.extend(zip(search_queries, serper_results))
+            if shopping_results:
+                state["expert_research_shopping"] = shopping_results
 
             # Process Serper results to get best URLs
-            try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(serper_results), 5)) as executor:
-                    future_to_query = {
-                        executor.submit(
-                            self.process_serper_result,
-                            query,
-                            result["results"] if result else {}
-                        ): query for query, result in zip(search_queries, serper_results)
-                    }
-                    best_url_results = []
-                    for future in concurrent.futures.as_completed(future_to_query):
-                        query = future_to_query[future]
-                        try:
-                            result = future.result()
-                            best_url_results.append(result)
-                        except Exception as exc:
-                            print(colored(f"Error processing result for query {query}: {exc}", 'red'))
-                            best_url_results.append(None)
-            except Exception as e:
-                print(colored(f"Error in threading: {str(e)}. Falling back to non-parallel processing for best URLs.", 'red'))
-                best_url_results = [
-                    self.process_serper_result(query, result["results"] if result else {})
-                    for query, result in zip(search_queries, serper_results)
-                ]
+            with Pool(processes=min(cpu_count(), len(serper_results))) as pool:
+                best_urls = pool.starmap(
+                    self.process_serper_result,
+                    [(query, result["results"]) for query, result in zip(search_queries, serper_results)] 
+                    # zip(search_queries, serper_results)
+                )
+        except Exception as e:
+            print(colored(f"Error in multithreaded processing: {str(e)}. Falling back to non-multithreaded approach.", "yellow"))
+            # Fallback to non-multithreaded approach
+            serper_results = [self.use_tool("serper", query["engine"], query["query"], None) for query in search_queries]
+            shopping_results = [result["results"] for result in serper_results if result["is_shopping"]]
+            if shopping_results:
+                state["expert_research_shopping"] = shopping_results
+            best_urls = [self.process_serper_result(query, result) for query, result in zip(search_queries, serper_results)]
 
-            # Collect all best URLs
-            all_best_urls.extend(best_url_results)
+        # Remove duplicates from the list of URLs # Additional Line
+        deduplicated_urls = {item['url']: item for item in best_urls}.values()
+        deduplicated_urls_list = list(deduplicated_urls)
 
-            # Remove duplicates while preserving query alignment
-            url_query_pairs = []
-            seen_urls = set()
-            for item in all_best_urls:
-                url = item["url"]
-                query = item["query"]["query"]
-                engine = item["query"]["engine"]
-                if url and engine == "search" and url not in seen_urls:
-                    url_query_pairs.append({"url": url, "query": query})
-                    seen_urls.add(url)
+        print(colored(f"\n\n  DEBUG DEBUG Best URLs: {deduplicated_urls_list}\n\n", 'red')) # DEBUG LINE 
+        unique_urls = list(dict.fromkeys(result["url"] for result in best_urls if result["url"] and result["query"]["engine"] == "search"))
+        unique_queries = list(dict.fromkeys(result["query"]["query"] for result in deduplicated_urls_list if result["query"] and result["query"]["engine"] == "search"))        # unique_urls = list(dict.fromkeys(url for url in best_urls if url))
+        
+        print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'yellow'))
+        print(colored(f"\n\n Search Queries {unique_queries}", 'yellow'))
 
-            # Extract unique URLs and queries while preserving alignment
-            unique_urls = [item["url"] for item in url_query_pairs]
-            unique_queries = [item["query"] for item in url_query_pairs]
+        for i, url in enumerate(unique_urls, 1):
+            print(colored("  {}. {}".format(i, url), 'green'))
+        print()
 
-            print(colored("\n\n Sourced data from {} sources:".format(len(unique_urls)), 'yellow'))
-            print(colored(f"\n\n Search Queries {unique_queries}", 'yellow'))
-
-            for i, url in enumerate(unique_urls, 1):
-                print(colored("  {}. {}".format(i, url), 'green'))
-
-            # Analyze search results and refine the queries
-            refined_search_queries = self.analyze_and_refine_queries([result for _, result in all_serper_results], meta_prompt)
-
-            # Check if refinement is needed
-            if not refined_search_queries or refined_search_queries == search_queries:
-                # No further refinement possible
-                break
-
-            # Update search queries for the next iteration
-            search_queries = refined_search_queries
-
-        # After iterations, process the collected results
         try:
-            scraper_response = self.use_tool(
-                mode="rag",
-                engine=None,
-                tool_input=unique_urls,
-                meta_prompt=meta_prompt,
-                query=unique_queries  # Pass aligned queries
-            )
+            scraper_response = self.use_tool(mode="rag", engine=None, tool_input=unique_urls, meta_prompt=meta_prompt, query=unique_queries)
         except Exception as e:
             scraper_response = {"results": f"Error {e}: Failed to scrape results", "is_shopping": False}
 
@@ -734,9 +655,9 @@ class ToolExpert(BaseAgent[State]):
 
         for key, value in updates.items():
             state = self.update_state(key, value, state)
-
+                
         return state
-        
+    
 class Router(BaseAgent[State]):
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
                  model_endpoint: str = None, stop: str = None):

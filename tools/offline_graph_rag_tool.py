@@ -228,6 +228,7 @@ def run_hybrid_graph_retrrieval(graph: Neo4jGraph = None, corpus: List[Document]
         MATCH p = (n)-[r]->(m)
         WHERE COUNT {{(n)--()}} > 30
         RETURN p AS Path
+        LIMIT 100
         """
         response = graph.query(query)
         retrieved_context = f"Important Relationships:{response}\n\n Additional Context:{unstructured_data}"
@@ -318,9 +319,14 @@ def create_graph_index(
     graph: Neo4jGraph = None,
     max_threads: int = 5
 ) -> Neo4jGraph:
-    # llm = ChatOpenAI(temperature=0, model_name="gpt-4o")
+    
+    if os.environ.get('LLM_SERVER') == "openai":
+        llm = ChatOpenAI(temperature=0, model_name="gpt-4o-mini")
 
-    llm = ChatAnthropic(temperature=0, model_name="claude-3-haiku-20240307")
+    else:
+        llm = ChatAnthropic(temperature=0, model_name="claude-3-haiku-20240307")
+
+    # llm = ChatAnthropic(temperature=0, model_name="claude-3-haiku-20240307")
 
     llm_transformer = LLMGraphTransformer(
         llm=llm,

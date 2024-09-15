@@ -1,12 +1,9 @@
 import os
-# import re
-# import time
 import asyncio
 import chainlit as cl
 from typing import Dict, Any
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import MemorySaver
-# from termcolor import colored
 from typing import Union
 from chainlit.input_widget import Select
 from agents.jar3d_agent import (State, 
@@ -238,7 +235,7 @@ async def start():
     def initialise_jar3d():
         jar3d_intro = Jar3dIntro(**agent_kwargs)
         jar3d_intro_hi = jar3d_intro.run(state)
-        jar3d_agent = Jar3d(**agent_kwargs)
+        jar3d_agent = Jar3d(**agent_kwargs_meta_expert)
         return jar3d_intro_hi, jar3d_agent
     
     loop = asyncio.get_running_loop()
@@ -250,17 +247,21 @@ async def start():
 
 
 def build_workflow():
-
     agent_kwargs = cl.user_session.get("agent_kwargs")
     agent_kwargs_tools = cl.user_session.get("agent_kwargs_tools")
     agent_kwargs_meta_expert = cl.user_session.get("agent_kwargs_meta_expert")
 
+    # Initialize agent instances
+    meta_expert_instance = MetaExpert(**agent_kwargs_meta_expert)
+    router_instance = Router(**agent_kwargs)
+    no_tool_expert_instance = NoToolExpert(**agent_kwargs)
+    tool_expert_instance = ToolExpert(**agent_kwargs_tools)
 
     graph = StateGraph(State)
-    graph.add_node("meta_expert", lambda state: MetaExpert(**agent_kwargs_meta_expert).run(state=state))
-    graph.add_node("router", lambda state: Router(**agent_kwargs).run(state=state))
-    graph.add_node("no_tool_expert", lambda state: NoToolExpert(**agent_kwargs).run(state=state))
-    graph.add_node("tool_expert", lambda state: ToolExpert(**agent_kwargs_tools).run(state=state))
+    graph.add_node("meta_expert", lambda state: meta_expert_instance.run(state=state))
+    graph.add_node("router", lambda state: router_instance.run(state=state))
+    graph.add_node("no_tool_expert", lambda state: no_tool_expert_instance.run(state=state))
+    graph.add_node("tool_expert", lambda state: tool_expert_instance.run(state=state))
     graph.add_node("end_chat", lambda state: set_chat_finished(state))
 
     graph.set_entry_point("meta_expert")
@@ -320,5 +321,5 @@ async def main(message: cl.Message):
         cl.user_session.set("state", state)  # Update the state in the session
 
     
-if __name__ == "__main__":
-    cl.run()
+# if __name__ == "__main__":
+#     cl.run()

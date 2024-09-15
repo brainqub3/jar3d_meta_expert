@@ -435,7 +435,8 @@ class OpenAIModel(BaseModel):
         
         if self.json_response:
             payload["response_format"] = {"type": "json_object"}
-        
+            payload["messages"][0]["content"] = f"{system}\n\nYou must respond in JSON format."
+                    
         try:
             response_json = self._make_request(self.model_endpoint, self.headers, payload)
 

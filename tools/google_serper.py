@@ -4,6 +4,7 @@ import json
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root_dir)
 import requests
+from typing import Dict, Any
 from config.load_configs import load_config
 
 def format_results(organic_results: str) -> str:
@@ -31,7 +32,7 @@ def format_shopping_results(shopping_results: list) -> str:
     
     return '\n'.join(result_strings)
 
-def serper_search(query: str, location:str) -> str:
+def serper_search(query: str, location: str) -> Dict[str, Any]:
     config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.yaml')
     load_config(config_path)
     search_url = "https://google.serper.dev/search"
@@ -47,10 +48,10 @@ def serper_search(query: str, location:str) -> str:
         results = response.json()
         
         if 'organic' in results:
-            formatted_results = format_results(results['organic'])
-            return formatted_results
+            # Return the raw results
+            return {'organic_results': results['organic']}
         else:
-            return "No organic results found."
+            return {'organic_results': []}
 
     except requests.exceptions.HTTPError as http_err:
         return f"HTTP error occurred: {http_err}"
@@ -61,7 +62,7 @@ def serper_search(query: str, location:str) -> str:
     except json.JSONDecodeError as json_err:
         return f"JSON decoding error occurred: {json_err}"
     
-def serper_shopping_search(query: str, location: str) -> str:
+def serper_shopping_search(query: str, location: str) -> Dict[str, Any]:
     config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.yaml')
     load_config(config_path)
     search_url = "https://google.serper.dev/shopping"
@@ -77,10 +78,10 @@ def serper_shopping_search(query: str, location: str) -> str:
         results = response.json()
         
         if 'shopping' in results:
-            formatted_results = format_shopping_results(results['shopping'])
-            return formatted_results
+            # Return the raw results
+            return {'shopping_results': results['shopping']}
         else:
-            return "No shopping results found."
+            return {'shopping_results': []}
 
     except requests.exceptions.RequestException as req_err:
         return f"Request error occurred: {req_err}"
