@@ -546,7 +546,12 @@ class ToolExpert(BaseAgent[State]):
 
         return {"query": query, "url": best_url_json.get("best_url")}
 
-    def analyze_and_refine_queries(self, serper_results: List[Dict[str, Any]], meta_prompt: str) -> List[Dict[str, str]]:
+    def analyze_and_refine_queries(
+        self,
+        serper_results: List[Dict[str, Any]],
+        meta_prompt: str,
+        num_queries: int = 1  # Default to 1 query
+    ) -> List[Dict[str, str]]:
         """
         Analyzes the search results and generates refined search queries.
         """
@@ -566,8 +571,9 @@ class ToolExpert(BaseAgent[State]):
                 snippets = [item.get("snippet", "") for item in organic_results]
             observations.extend(snippets)
 
+        # Include num_queries in the prompt to control the number of queries generated
         analysis_prompt_template = """
-        Based on the following search results, generate new search queries to further investigate the topic.
+        Based on the following search results, generate {num_queries} new search queries to further investigate the topic.
 
         # Search Results
         {observations}
@@ -586,13 +592,15 @@ class ToolExpert(BaseAgent[State]):
                 {{"engine": "search", "query": "New Query 1"}},
                 {{"engine": "shopping", "query": "New Query 2"}},
                 ...
+                {{"engine": "search", "query": "New Query {num_queries}"}}
             ]
         }}
         """
 
         analysis_prompt = analysis_prompt_template.format(
             observations="\n".join(observations),
-            meta_prompt=meta_prompt
+            meta_prompt=meta_prompt,
+            num_queries=num_queries  # Pass the num_queries to the prompt
         )
 
         analysis_llm = self.get_llm(json_model=True)
@@ -609,8 +617,12 @@ class ToolExpert(BaseAgent[State]):
             print(colored("\n\n DEBUG: We are running the analysis without vllm\n\n", 'red'))
             refined_queries = analysis_llm.invoke(input_data)
 
+        # Parse the LLM's response
         refined_queries_json = json.loads(refined_queries)
-        return refined_queries_json.get("search_queries", [])
+        refined_queries_list = refined_queries_json.get("search_queries", [])
+
+        # Limit the number of queries returned to num_queries
+        return refined_queries_list[:num_queries]
 
     def run(self, state: State) -> State:
         meta_prompt = state["meta_prompt"][-1].content
@@ -621,7 +633,7 @@ class ToolExpert(BaseAgent[State]):
         iteration = 0
 
         # Initial search queries
-        search_queries = self.generate_search_queries(meta_prompt, num_queries=5)
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=1)
         all_serper_results = []
         all_best_urls = []
 
@@ -708,7 +720,11 @@ class ToolExpert(BaseAgent[State]):
                 print(colored("  {}. {}".format(i, url), 'green'))
 
             # Analyze search results and refine the queries
-            refined_search_queries = self.analyze_and_refine_queries([result for _, result in all_serper_results], meta_prompt)
+            refined_search_queries = self.analyze_and_refine_queries(
+                [result for _, result in all_serper_results],
+                meta_prompt,
+                num_queries=1  # Limit to 1 query per iteration
+            )
 
             # Check if refinement is needed
             if not refined_search_queries or refined_search_queries == search_queries:
