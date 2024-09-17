@@ -8,13 +8,12 @@ import numpy as np
 import faiss
 import traceback
 import tempfile
-from typing import Dict, List, Optional
+from typing import Dict, List
 from termcolor import colored
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_community.graphs import Neo4jGraph
 from langchain_experimental.graph_transformers.llm import LLMGraphTransformer
-from langchain_core.runnables import RunnableConfig
 # from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -69,50 +68,6 @@ def deduplicate_results(results, rerank=True):
             seen.add(identifier)
             unique_results.append(result)
     return unique_results
-
-
-class CustomLLMGraphTransformer(LLMGraphTransformer):
-    def process_response(self, document: Document, config: Optional[RunnableConfig] = None):
-        # Call the parent method to get the graph document
-        graph_document = super().process_response(document, config)
-        
-        source = document.metadata.get('source', 'unknown')
-        
-        # Add the source property to each node
-        for node in graph_document.nodes:
-            if node.properties is None:
-                node.properties = {}
-            node.properties['source'] = source
-        
-        # Add the source property to each relationship
-        if graph_document.relationships:
-            for relationship in graph_document.relationships:
-                if relationship.properties is None:
-                    relationship.properties = {}
-                relationship.properties['source'] = source
-        
-        return graph_document
-
-    async def aprocess_response(self, document: Document, config: Optional[RunnableConfig] = None):
-        # Call the parent async method to get the graph document
-        graph_document = await super().aprocess_response(document, config)
-        
-        source = document.metadata.get('source', 'unknown')
-        
-        # Add the source property to each node
-        for node in graph_document.nodes:
-            if node.properties is None:
-                node.properties = {}
-            node.properties['source'] = source
-        
-        # Add the source property to each relationship
-        if graph_document.relationships:
-            for relationship in graph_document.relationships:
-                if relationship.properties is None:
-                    relationship.properties = {}
-                relationship.properties['source'] = source
-        
-        return graph_document
 
 
 def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, batch_size: int = 25) -> List[Dict[str, str]]:
@@ -262,7 +217,7 @@ def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, 
 
     return final_results
 
-def run_hybrid_graph_retrieval(graph: Neo4jGraph = None, corpus: List[Document] = None, query: str = None, hybrid: bool = False):
+def run_hybrid_graph_retrrieval(graph: Neo4jGraph = None, corpus: List[Document] = None, query: str = None, hybrid: bool = False):
     print(colored(f"\n\Initiating Retrieval...\n\n", "green"))
 
     if hybrid:
@@ -352,42 +307,28 @@ def clear_neo4j_database(graph: Neo4jGraph):
 
 def process_document(doc: Document, llm_transformer: LLMGraphTransformer, doc_num: int, total_docs: int) -> List:
     print(colored(f"\n\nStarting Document {doc_num} of {total_docs}: {doc.page_content[:100]}\n\n", "yellow"))
-    graph_documents = llm_transformer.convert_to_graph_documents([doc])
-    
-    # Manually add source metadata to nodes and relationships
-    for graph_doc in graph_documents:
-        source = doc.metadata.get('source', 'unknown')
-        if 'nodes' in graph_doc:
-            for node in graph_doc['nodes']:
-                if 'properties' not in node:
-                    node['properties'] = {}
-                node['properties']['source'] = source
-
-        if 'relationships' in graph_doc:
-            for relationship in graph_doc['relationships']:
-                if 'properties' not in relationship:
-                    relationship['properties'] = {}
-                relationship['properties']['source'] = source
-
+    graph_document = llm_transformer.convert_to_graph_documents([doc])
     print(colored(f"\nFinished Document {doc_num}\n\n", "green"))
-    return graph_documents
+    return graph_document
 
 def create_graph_index(
     documents: List[Document] = None, 
-    allowed_relationships: List[str] = None, 
-    allowed_nodes: List[str] = None, 
+    allowed_relationships: list[str] = None, 
+    allowed_nodes: list[str] = None, 
     query: str = None, 
     graph: Neo4jGraph = None,
-    batch_size: int = 10,
-    max_workers: int = 5  # Number of threads in the pool
+    max_threads: int = 5
 ) -> Neo4jGraph:
     
     if os.environ.get('LLM_SERVER') == "openai":
         llm = ChatOpenAI(temperature=0, model_name="gpt-4o-mini")
+
     else:
         llm = ChatAnthropic(temperature=0, model_name="claude-3-haiku-20240307")
 
-    llm_transformer = CustomLLMGraphTransformer(
+    # llm = ChatAnthropic(temperature=0, model_name="claude-3-haiku-20240307")
+
+    llm_transformer = LLMGraphTransformer(
         llm=llm,
         allowed_nodes=allowed_nodes,
         allowed_relationships=allowed_relationships,
@@ -395,53 +336,31 @@ def create_graph_index(
         relationship_properties=True
     )
 
-    total_docs = len(documents)
-    
-    # Prepare batches
-    batches = [
-        documents[i:i + batch_size]
-        for i in range(0, total_docs, batch_size)
-    ]
-    total_batches = len(batches)
-
-    print(colored(f"\nTotal documents: {total_docs}, Total batches: {total_batches}\n", "green"))
-
     graph_documents = []
+    total_docs = len(documents)
 
-    def process_batch(batch_docs, batch_number):
-        print(colored(f"\nProcessing batch {batch_number} of {total_batches}\n", "yellow"))
-        try:
-            batch_graph_docs = llm_transformer.convert_to_graph_documents(batch_docs)
-            print(colored(f"Finished batch {batch_number}\n", "green"))
-            return batch_graph_docs
-        except Exception as e:
-            print(colored(f"Error processing batch {batch_number}: {str(e)}", "red"))
-            traceback.print_exc()
-            return []
+    # Use ThreadPoolExecutor for parallel processing
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+        # Create a list of futures
+        futures = [
+            executor.submit(process_document, doc, llm_transformer, i+1, total_docs)
+            for i, doc in enumerate(documents)
+        ]
 
-    # Use ThreadPoolExecutor for parallel processing of batches
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all batches to the executor
-        future_to_batch = {
-            executor.submit(process_batch, batch, idx + 1): idx + 1
-            for idx, batch in enumerate(batches)
-        }
+        # Process completed futures
+        for future in concurrent.futures.as_completed(futures):
+            graph_documents.extend(future.result())
 
-        # Collect results as they complete
-        for future in concurrent.futures.as_completed(future_to_batch):
-            batch_number = future_to_batch[future]
-            try:
-                batch_graph_docs = future.result()
-                graph_documents.extend(batch_graph_docs)
-            except Exception as e:
-                print(colored(f"Exception in batch {batch_number}: {str(e)}", "red"))
-                traceback.print_exc()
+    print(colored(f"\n\nTotal graph documents: {len(graph_documents)}", "green"))
+    # print(colored(f"\n\DEBUG graph documents: {graph_documents}", "red"))
 
-    print(colored(f"\nTotal graph documents: {len(graph_documents)}\n", "green"))
+    graph_documents = [graph_documents]
+    flattened_graph_list = [item for sublist in graph_documents for item in sublist]
+    # print(colored(f"\n\DEBUG Flattened graph documents: {flattened_graph_list}", "yellow"))
 
-    # Add documents to the graph
+
     graph.add_graph_documents(
-        graph_documents, 
+        flattened_graph_list, 
         baseEntityLabel=True, 
         include_source=True,
     )
@@ -449,7 +368,7 @@ def create_graph_index(
     return graph
 
 
-def run_rag(urls: List[str], allowed_nodes: List[str] = None, allowed_relationships: List[str] = None, query: List[str] = None, hybrid: bool = False) -> List[Dict[str, str]]:
+def run_rag(urls: List[str], allowed_nodes: list[str] = None, allowed_relationships: list[str] = None, query: List[str] = None, hybrid: bool = False) -> List[Dict[str, str]]:
     # Change: adapted to take query and url as input.
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(urls), 5)) as executor:  
             futures = [executor.submit(intelligent_chunking, url, query) for url, query in zip(urls, query)]
@@ -471,7 +390,7 @@ def run_rag(urls: List[str], allowed_nodes: List[str] = None, allowed_relationsh
     else:
         graph = None
 
-    retrieved_context = run_hybrid_graph_retrieval(graph=graph, corpus=corpus, query=query, hybrid=hybrid)
+    retrieved_context = run_hybrid_graph_retrrieval(graph=graph, corpus=corpus, query=query, hybrid=hybrid)
 
     retrieved_context = str(retrieved_context)
 

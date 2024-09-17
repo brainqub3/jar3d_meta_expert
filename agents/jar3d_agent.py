@@ -24,7 +24,7 @@ from prompt_engineering.guided_json_lib import (
 )
 
 
-setup_logging(level=logging.DEBUG)
+setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class MessageDict(TypedDict):
@@ -118,7 +118,14 @@ class Jar3d(BaseAgent[State]):
         self.llm = self.get_llm(json_model=False)
 
     def get_prompt(self, state: State = None) -> str:
-        system_prompt = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
+        system_prompt_md = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
+
+        if state['meta_prompt']:
+            system_prompt = f"{system_prompt_md}\n <Type2> {state['meta_prompt'][-1].content} </Type2>"
+            print(colored(f"\n\n DEBUG SYSTEM PROMPT!!!: {system_prompt}\n\n", 'green'))
+        else:
+            system_prompt = system_prompt_md
+        
         return system_prompt
         
     def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[Dict[str, str]]]:
@@ -145,8 +152,9 @@ class Jar3d(BaseAgent[State]):
 
     def run_chainlit(self, state: State, message: cl.Message) -> State:
         user_message = message.content
-        system_prompt = self.get_prompt()
-        user_input = f"{system_prompt}\n cogor {user_message}"
+        # system_prompt = self.get_prompt()
+        # user_input = f"{system_prompt}\n cogor {user_message}"
+        user_input = f"cogor: {user_message}"
     
         state = self.invoke(state=state, user_input=user_input)
         response = state['requirements_gathering'][-1]["content"]
@@ -633,7 +641,7 @@ class ToolExpert(BaseAgent[State]):
         iteration = 0
 
         # Initial search queries
-        search_queries = self.generate_search_queries(meta_prompt, num_queries=1)
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=2)
         all_serper_results = []
         all_best_urls = []
 
@@ -723,7 +731,7 @@ class ToolExpert(BaseAgent[State]):
             refined_search_queries = self.analyze_and_refine_queries(
                 [result for _, result in all_serper_results],
                 meta_prompt,
-                num_queries=1  # Limit to 1 query per iteration
+                num_queries=2  # Limit to 1 query per iteration
             )
 
             # Check if refinement is needed

@@ -13,7 +13,7 @@ from agents.base_agent import BaseAgent
 from utils.read_markdown import read_markdown_file
 from tools.google_serper import serper_search, serper_shopping_search
 from utils.logging import log_function, setup_logging
-from tools.offline_rag_tool import run_rag
+from tools.offline_graph_rag_tool import run_rag
 from prompt_engineering.guided_json_lib import (
     guided_json_search_query, 
     guided_json_best_url_two, 
@@ -115,7 +115,8 @@ class Jar3d(BaseAgent[State]):
         self.llm = self.get_llm(json_model=False)
 
     def get_prompt(self, state: State = None) -> str:
-        system_prompt = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
+        system_prompt_md = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
+        system_prompt = f"{system_prompt_md}\n <Type2> {state.get('final_answer', '')} </Type2>"
         return system_prompt
         
     def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[Dict[str, str]]]:
@@ -142,8 +143,10 @@ class Jar3d(BaseAgent[State]):
 
     def run_chainlit(self, state: State, message: cl.Message) -> State:
         user_message = message.content
-        system_prompt = self.get_prompt()
-        user_input = f"{system_prompt}\n cogor {user_message}"
+        # system_prompt = self.get_prompt()
+        user_input = f"cogor:{user_message}"
+
+        # user_input = f"{system_prompt}\n cogor {user_message}"
     
         state = self.invoke(state=state, user_input=user_input)
         response = state['requirements_gathering'][-1]["content"]

@@ -1,5 +1,6 @@
 import os
 import asyncio
+import re
 import chainlit as cl
 from typing import Dict, Any
 from langgraph.graph import StateGraph
@@ -126,7 +127,9 @@ class Jar3dIntro(BaseAgent[State]):
 
     def run(self, state: State) -> State:
         state = self.invoke(state=state, user_input="/start")
-        jar3d_intro = state["requirements_gathering"][-1]["content"]  
+        jar3d_intro = state["requirements_gathering"][-1]["content"]
+        jar3d_intro = re.sub(r'^```python[\s\S]*?```\s*', '', jar3d_intro, flags=re.MULTILINE)
+        jar3d_intro = jar3d_intro.lstrip() 
 
         return jar3d_intro
 
