@@ -88,6 +88,32 @@ def serper_shopping_search(query: str, location: str) -> Dict[str, Any]:
     except json.JSONDecodeError as json_err:
         return f"JSON decoding error occurred: {json_err}"
 
+def serper_scholar_search(query: str, location: str) -> Dict[str, Any]:
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.yaml')
+    load_config(config_path)
+    search_url = "https://google.serper.dev/scholar"
+    headers = {
+        'Content-Type': 'application/json',
+        'X-API-KEY': os.environ['SERPER_API_KEY']  # Ensure this environment variable is set
+    }
+    payload = json.dumps({"q": query, "gl": location})
+    
+    try:
+        response = requests.post(search_url, headers=headers, data=payload)
+        response.raise_for_status()
+        results = response.json()
+        
+        if 'organic' in results:
+            # Return the raw results
+            return {'scholar_results': results['organic']}
+        else:
+            return {'scholar_results': []}
+    
+    except requests.exceptions.RequestException as req_err:
+        return f"Request error occurred: {req_err}"
+    except json.JSONDecodeError as json_err:
+        return f"JSON decoding error occurred: {json_err}"
+
 # Example usage
 if __name__ == "__main__":
     search_query = "NVIDIA RTX 6000"

@@ -7,12 +7,16 @@ import functools
 import numpy as np
 import faiss
 import traceback
+import tempfile
 from typing import Dict, List, Optional
 from termcolor import colored
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_community.graphs import Neo4jGraph
+# from langchain_experimental.graph_transformers.llm import LLMGraphTransformer
 from tools.llm_graph_transformer import LLMGraphTransformer
+from langchain_core.runnables import RunnableConfig
+# from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_community.vectorstores import FAISS
 from flashrank import Ranker, RerankRequest
@@ -21,6 +25,7 @@ from langchain.schema import Document
 from config.load_configs import load_config
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from fake_useragent import UserAgent
+import asyncio
 
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root_dir)
@@ -303,7 +308,6 @@ def clear_neo4j_database(graph: Neo4jGraph):
         print(colored(f"Error clearing Neo4j database: {str(e)}", "red"))
         traceback.print_exc()
 
-
 def create_graph_index(
     documents: List[Document] = None, 
     allowed_relationships: List[str] = None, 
@@ -340,10 +344,14 @@ def create_graph_index(
 
     graph_documents = []
 
-    def process_batch(batch_docs, batch_number):
+    async def process_batch_async(batch_docs, batch_number):
         print(colored(f"\nProcessing batch {batch_number} of {total_batches}\n", "yellow"))
         try:
-            batch_graph_docs = llm_transformer.convert_to_graph_documents(batch_docs)
+            tasks = [
+                asyncio.create_task(llm_transformer.aprocess_response(doc))
+                for doc in batch_docs
+            ]
+            batch_graph_docs = await asyncio.gather(*tasks)
             print(colored(f"Finished batch {batch_number}\n", "green"))
             return batch_graph_docs
         except Exception as e:
@@ -351,23 +359,10 @@ def create_graph_index(
             traceback.print_exc()
             return []
 
-    # Use ThreadPoolExecutor for parallel processing of batches
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all batches to the executor
-        future_to_batch = {
-            executor.submit(process_batch, batch, idx + 1): idx + 1
-            for idx, batch in enumerate(batches)
-        }
-
-        # Collect results as they complete
-        for future in concurrent.futures.as_completed(future_to_batch):
-            batch_number = future_to_batch[future]
-            try:
-                batch_graph_docs = future.result()
-                graph_documents.extend(batch_graph_docs)
-            except Exception as e:
-                print(colored(f"Exception in batch {batch_number}: {str(e)}", "red"))
-                traceback.print_exc()
+    for idx, batch in enumerate(batches):
+        batch_number = idx + 1
+        batch_graph_docs = asyncio.run(process_batch_async(batch, batch_number))
+        graph_documents.extend(batch_graph_docs)
 
     print(colored(f"\nTotal graph documents: {len(graph_documents)}\n", "green"))
 

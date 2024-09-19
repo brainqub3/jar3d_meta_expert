@@ -36,7 +36,7 @@ def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool 
 
     if server == "openai":
         agent_kwargs = {
-        "model": "gpt-4o",
+        "model": "gpt-4o-mini",
         "server": "openai",
         "temperature": 0,
         }
@@ -172,22 +172,6 @@ async def update_settings(settings):
 @cl.on_chat_start
 async def start():
 
-    agent_memory_dir = '/app/agent_memory'
-    file_path = os.path.join(agent_memory_dir, 'jar3d_final_response_previous_run.txt')
-    
-    # Ensure the directory exists
-    os.makedirs(agent_memory_dir, exist_ok=True)
-    
-    # Clear the file content
-    open(file_path, 'w').close()
-
-    task_list = cl.TaskList()
-    task_list.status = "Ready"
-    cl.user_session.set("task_list", task_list)
-
-    # Send the TaskList to the UI
-    await task_list.send()
-
     state: State = {
     "meta_prompt": [],
     "conversation_history": [],
@@ -298,72 +282,22 @@ def build_workflow():
     workflow = graph.compile(checkpointer)
     return workflow
 
-def _run_workflow_sync(workflow, state, configs, progress_queue):
-    seen_progress_messages = set()
-    try:
-        for event in workflow.stream(state, configs):
-            # Access the node's output directly
-            node_output = next(iter(event.values()))
+def run_workflow(workflow, state):
 
-            # Access 'progress_tracking' from the node's output
-            progress_message = node_output.get("progress_tracking", "")
-            if progress_message:
-                if progress_message not in seen_progress_messages:
-                    print(f"Extracted progress_message: {progress_message}")
-                    progress_queue.put_nowait(progress_message)
-                    seen_progress_messages.add(progress_message)
-                else:
-                    print(f"Duplicate progress_message ignored: {progress_message}")
-        progress_queue.put_nowait(None)  # Signal that the workflow is complete
-    except Exception as e:
-        print(f"Exception in workflow execution: {e}")
-        progress_queue.put_nowait(None)
-
-async def run_workflow(workflow, state):
     state["recursion_limit"] = recursion_limit
     state["user_input"] = "/start"
     configs = {"recursion_limit": recursion_limit + 10, "configurable": {"thread_id": 42}}
 
-    progress_queue = asyncio.Queue()
-    task_list = cl.user_session.get("task_list")
+    for event in workflow.stream(state, configs):
+        pass
 
-    # Set the TaskList status and send it to the UI
-    task_list.status = "Running..."
-    await task_list.send()
-
-    loop = asyncio.get_running_loop()
-    # Run the synchronous _run_workflow_sync in a background thread
-    loop.run_in_executor(
-        None, _run_workflow_sync, workflow, state, configs, progress_queue
-    )
-
-    # Process progress messages and update the TaskList
-    while True:
-        progress_message = await progress_queue.get()
-        if progress_message is None:
-            # Workflow is complete
-            break
-
-        # Create a new task with status RUNNING
-        task = cl.Task(title=progress_message, status=cl.TaskStatus.RUNNING)
-        await task_list.add_task(task)
-        await task_list.send()
-
-        # Simulate task completion (you can adjust this based on actual progress)
-        task.status = cl.TaskStatus.DONE
-        await task_list.send()
-
-    # Update TaskList status to Done and send the final update
-    task_list.status = "Done"
-    await task_list.send()
-
-    # Retrieve the final state
-    final_state = workflow.get_state(configs)
-    final_state = final_state.values
-    final_answer = final_state.get(
-        "final_answer",
-        "The agent failed to deliver a final response. Please check the logs for more information."
-    )
+    state = workflow.get_state(configs)
+    state = state.values
+    try:
+        final_answer = state["final_answer"]
+    except Exception as e:
+        print(f"Error extracting final answer: {e}")
+        final_answer = "The agent failed to deliver a final response. Please check the logs for more information."
     return final_answer
 
 
@@ -373,23 +307,23 @@ async def main(message: cl.Message):
     agent: Jar3d = cl.user_session.get("jar3d_agent")
     workflow = cl.user_session.get("workflow")
     
+    # Running the synchronous function in a separate thread
     loop = asyncio.get_running_loop()
     state, response = await loop.run_in_executor(None, agent.run_chainlit, state, message)
 
+    # Display the response (requirements) immediately
     await cl.Message(content=response, author="Jar3d👩‍💻").send()
 
     if message.content == "/end":
-        await cl.Message(
-            content="This will take some time, probably a good time for a coffee break ☕...",
-            author="System"
-        ).send()
-        final_answer = await run_workflow(workflow, state)
+        await cl.Message(content="This will take some time, probably a good time for a coffee break ☕...", author="System").send()
+        final_answer = await cl.make_async(run_workflow)(workflow, state)
         if final_answer:
             await cl.Message(content=final_answer, author="Jar3d👩‍💻").send()
         else:
             await cl.Message(content="No final answer was produced.", author="Jar3d👩‍💻").send()
     else:
-        cl.user_session.set("state", state)
+        cl.user_session.set("state", state)  # Update the state in the session
 
+    
 # if __name__ == "__main__":
 #     cl.run()

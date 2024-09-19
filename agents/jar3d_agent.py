@@ -1,4 +1,5 @@
 import json
+import os
 from multiprocessing import Pool, cpu_count
 # import requests
 # from tenacity import RetryError
@@ -47,6 +48,7 @@ class State(TypedDict):
     recursion_limit: int
     final_answer: str
     previous_type2_work: Annotated[List[str], add_messages]
+    progress_tracking: str
 
 state: State = {
     "meta_prompt": [],
@@ -63,7 +65,8 @@ state: State = {
     "chat_finished": False,
     "recursion_limit": None,
     "final_answer": None,
-    "previous_type2_work": []
+    "previous_type2_work": [],
+    "progress_tracking": None
 }
 
 def chat_counter(state: State) -> State:
@@ -79,37 +82,60 @@ def routing_function(state: State) -> str:
         print(colored(f"\n\n Routing function called. Decision: {decision}\n\n", 'green'))
         return decision
 
-def set_chat_finished(state: State) -> bool:
-    state["chat_finished"] = True
-    final_response = state["meta_prompt"][-1].content
-    print(colored(f"\n\n DEBUG FINAL RESPONSE: {final_response}\n\n", 'green'))   
-    
+
+def format_final_response(final_response: str) -> str:
+    print(colored(f"\n\n DEBUG FINAL RESPONSE: {final_response}\n\n", 'green'))
+
     # Split the response at ">> FINAL ANSWER:"
     parts = final_response.split(">> FINAL ANSWER:")
     if len(parts) > 1:
         answer_part = parts[1].strip()
-        
+
         # Remove any triple quotes
         final_response_formatted = answer_part.strip('"""')
-        
-        # Remove leading whitespace
-        final_response_formatted = final_response_formatted.lstrip()
-        
+
+        # Remove leading and trailing whitespace
+        final_response_formatted = final_response_formatted.strip()
+
         # Remove the CoR dictionary at the end
         cor_pattern = r'\nCoR\s*=\s*\{[\s\S]*\}\s*$'
         final_response_formatted = re.sub(cor_pattern, '', final_response_formatted)
-        
+
         # Remove any trailing whitespace
         final_response_formatted = final_response_formatted.rstrip()
-        
-        # print(colored(f"\n\n DEBUG: {final_response_formatted}\n\n", 'green'))
-        print(colored(f"\n\n Jar3d👩‍💻: {final_response_formatted}", 'cyan'))
-        state["final_answer"] = f'''{final_response_formatted}'''
+
+        return final_response_formatted
     else:
-        print(colored("Error: Could not find '>> FINAL ANSWER:' in the response", 'red'))
-        state["final_answer"] = "Error: No final answer found"
+        error_message = "Error: Could not find '>> FINAL ANSWER:' in the response"
+        print(colored(error_message, 'red'))
+        return "Error: No final answer found"
+
+
+def set_chat_finished(state: State) -> State:
+    state["chat_finished"] = True
+    final_response = state["meta_prompt"][-1].content
+
+    # Use the formatting function
+    final_response_formatted = format_final_response(final_response)
+
+    agent_memory_dir = '/app/agent_memory'  # No change needed
+    file_path = os.path.join(agent_memory_dir, 'jar3d_final_response_previous_run.txt')
+
+    # Save the formatted final response to a text file
+    with open(file_path, 'w') as file:
+        file.write(final_response_formatted)
+    
+    # Print confirmation message
+    print(colored(f"\n\nFinal response saved to jar3d_final_response_previous_run.txt", 'green'))
+
+    # Print the formatted final response
+    print(colored(f"\n\n Jar3d👩‍💻: {final_response_formatted}", 'cyan'))
+
+    # Update the state with the final answer
+    # state["final_answer"] = final_response_formatted
 
     return state
+
 
 class Jar3d(BaseAgent[State]):
     def __init__(self, model: str = None, server: str = None, temperature: float = 0, 
@@ -120,9 +146,18 @@ class Jar3d(BaseAgent[State]):
     def get_prompt(self, state: State = None) -> str:
         system_prompt_md = read_markdown_file('prompt_engineering/jar3d_requirements_prompt.md')
 
-        if state['meta_prompt']:
-            system_prompt = f"{system_prompt_md}\n <Type2> {state['meta_prompt'][-1].content} </Type2>"
-            print(colored(f"\n\n DEBUG SYSTEM PROMPT!!!: {system_prompt}\n\n", 'green'))
+        final_answer = None
+        agent_memory_dir = '/app/agent_memory'
+        file_path = os.path.join(agent_memory_dir, 'jar3d_final_response_previous_run.txt')
+
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as file:
+                final_answer = file.read().strip()
+        
+        # Add the final_answer to the system prompt if it exists
+        if final_answer:
+            system_prompt = f"{system_prompt_md}\n # The AI Agent's Previous Work \n <Type2> {final_answer} </Type2>"
+            print(colored(f"\n\n DEBUG JAR3D SYSTEM PROMPT FINAL ANSWER: {final_answer}\n\n", 'green'))
         else:
             system_prompt = system_prompt_md
         
@@ -176,6 +211,26 @@ class MetaExpert(BaseAgent[State]):
         
     def process_response(self, response: Any, user_input: str, state: State = None) -> Dict[str, List[MessageDict]]:
         user_input = None
+        # Identify the type of work and expert (if applicable) from the response
+
+        response_str = str(response)
+        formatted_response = None
+
+        if ">> FINAL ANSWER:" in response_str:
+        # It's a Type 2 work - Jar3d is delivering a final answer
+            next_steps = "Jar3d has delivered a final answer"
+            formatted_response = format_final_response(response_str)
+        else:
+            # Try to extract the expert's name for Type 1 work
+            expert_match = re.search(r"Expert\s+([\w\s]+):", response_str)
+            if expert_match:
+                # It's a Type 1 work - Jar3d is allocating an expert
+                associated_expert = expert_match.group(1).strip()
+                next_steps = f"Jar3d has allocated {associated_expert} to work on your request."
+            else:
+                # Neither Type 1 nor Type 2 work detected
+                next_steps = "Jar3d is processing the request."
+
         updates_conversation_history = {
             "meta_prompt": [
                 {"role": "user", "content": f"{user_input}"},
@@ -187,6 +242,10 @@ class MetaExpert(BaseAgent[State]):
                 {"role": "assistant", "content": str(response)}
 
             ],
+
+            "progress_tracking": f"{next_steps}",
+            "final_answer": formatted_response
+    
         }
         return updates_conversation_history
     
@@ -200,6 +259,9 @@ class MetaExpert(BaseAgent[State]):
             all_expert_research.extend(expert_research)
         else:
             all_expert_research = []
+
+        max_length = 350000
+        truncated_expert_research = all_expert_research[:max_length]
 
         expert_message_history = f"""
         <expert_plan>
@@ -215,7 +277,7 @@ class MetaExpert(BaseAgent[State]):
         </internet_research_shopping_list>
 
         <internet_research>
-        ## Your Expert Research:{all_expert_research}\n
+        ## Your Expert Research:{truncated_expert_research}\n
         </internet_research>
         """
 
@@ -346,8 +408,8 @@ class NoToolExpert(BaseAgent[State]):
                 {"role": "assistant", "content": f"{str(response)}"}
 
             ],
-            expert_update_key: {"role": "assistant", "content": f"{str(response)}"}
-
+            expert_update_key: {"role": "assistant", "content": f"{str(response)}"},
+            "progress_tracking": f"Jar3d has completed its {associated_expert} work"
         }
 
 
@@ -401,12 +463,21 @@ class ToolExpert(BaseAgent[State]):
         return system_prompt
         
     def process_response(self, response: Any, user_input: str = None, state: State = None) -> Dict[str, Union[str, dict]]:
+
+        if self.hybrid:
+            message = f"""Jar3d has completed its internet research.
+            Jar3d has generated a knowledge graph, you can view it here: https://neo4j.com/product/auradb/
+            """
+        else:
+            message = f"""Jar3d has completed its internet research.
+            """
         updates_conversation_history = {
             "conversation_history": [
                 {"role": "user", "content": user_input},
                 {"role": "assistant", "content": f"{str(response)}"}
             ],
-            "expert_research": {"role": "assistant", "content": f"{str(response)}"}
+            "expert_research": {"role": "assistant", "content": f"{str(response)}"},
+            "progress_tracking": message
         }
         return updates_conversation_history
     
@@ -427,14 +498,12 @@ class ToolExpert(BaseAgent[State]):
             elif engine == "shopping":
                 results = serper_shopping_search(tool_input, self.location)
                 return {"results": results, "is_shopping": True}
+            # elif engine == "scholar":
+            #     results = serper_scholar_search(tool_input, self.location)
+            #     return {"results": results, "is_shopping": False}
+            
         elif mode == "rag":
             print(colored(f"\n\n DEBUG: We are running the Graph RAG TOOL!!\n\n", 'red'))
-
-            # if hybrid:
-            #     nodes, relationships = self.get_graph_elements(meta_prompt)
-            #     print(colored(f"\n\n DEBUG: Nodes: {nodes}\n\n", 'green'))
-            #     print(colored(f"\n\n DEBUG: Relationships: {relationships}\n\n", 'green'))
-            # else:
             nodes = None
             relationships = None
             print(colored(f"\n\n DEBUG Retreival Mode: {hybrid}\n\n", 'green'))
@@ -492,11 +561,14 @@ class ToolExpert(BaseAgent[State]):
             ]
         }}
 
+
         Remember:
         - Generate {num_queries} unique and diverse search queries.
         - Each query should explore a different aspect or approach to the topic.
         - Ensure the queries cover various aspects of the manager's instructions.
-        - The "engine" field should be either "search" or "shopping" for each query.
+        - The "engine" field should be "search" or "shopping" for each query.
+        - "search" best for general websearch.
+        - "shopping" best when you need to find products and prices.
         """
 
         refine_query = self.get_llm(json_model=True)
@@ -641,7 +713,7 @@ class ToolExpert(BaseAgent[State]):
         iteration = 0
 
         # Initial search queries
-        search_queries = self.generate_search_queries(meta_prompt, num_queries=2)
+        search_queries = self.generate_search_queries(meta_prompt, num_queries=5)
         all_serper_results = []
         all_best_urls = []
 
@@ -731,7 +803,7 @@ class ToolExpert(BaseAgent[State]):
             refined_search_queries = self.analyze_and_refine_queries(
                 [result for _, result in all_serper_results],
                 meta_prompt,
-                num_queries=2  # Limit to 1 query per iteration
+                num_queries=1  # Limit to 1 query per iteration
             )
 
             # Check if refinement is needed
@@ -779,8 +851,9 @@ class Router(BaseAgent[State]):
                 {"role": "user", "content": user_input},
                 {"role": "assistant", "content": f"{str(response)}"}
 
-            ]
-        }
+            ],
+            "progress_tracking": f"Jar3d has routed to an expert 🤓"
+        },
 
         return updates_conversation_history
     

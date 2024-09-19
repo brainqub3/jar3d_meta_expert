@@ -411,9 +411,7 @@ class OpenAIModel(BaseModel):
                     "role": "user",
                     "content": f"{system}\n\n{user}"
                 }
-            ],
-            "stream": False,
-            "temperature": self.temperature,
+            ]
         }
 
         else:

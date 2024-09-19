@@ -18,3 +18,4 @@ FlashRank==0.2.6
 chromadb==0.5.5
 timeout-decorator==0.5.0
 neo4j==5.23.1
+# syncer==2.0.3
