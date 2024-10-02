@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root_dir)
 import concurrent.futures
@@ -7,7 +8,7 @@ import functools
 import numpy as np
 import faiss
 import traceback
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from termcolor import colored
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
@@ -68,9 +69,9 @@ def deduplicate_results(results, rerank=True):
     return unique_results
 
 
-def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, batch_size: int = 25) -> List[Dict[str, str]]:
+def index_and_rank(corpus: List[Document], query: str, top_percent: float = 50, batch_size: int = 25) -> List[Dict[str, str]]:
     print(colored(f"\n\nStarting indexing and ranking with FastEmbeddings and FAISS for {len(corpus)} documents\n\n", "green"))
-    CACHE_DIR = "/app/fastembed_cache"
+    CACHE_DIR = "/fastembed_cache"
     embeddings = FastEmbedEmbeddings(model_name='jinaai/jina-embeddings-v2-small-en', max_length=512, cache_dir=CACHE_DIR)
 
     print(colored("\n\nCreating FAISS index...\n\n", "green"))
@@ -118,7 +119,7 @@ def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, 
         retriever = FAISS(embeddings, index, docstore, index_to_docstore_id)
 
         # Perform the search
-        k = min(40, len(corpus))  # Ensure we don't try to retrieve more documents than we have
+        k = min(100, len(corpus))  # Ensure we don't try to retrieve more documents than we have
 
         # Change: Retrieve documents based on query in metadata  
         similarity_cache = {}
@@ -159,7 +160,7 @@ def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, 
 
         print(colored("\n\nRe-ranking documents...\n\n", "green"))
         # Change: reranker done based on query in metadata
-        CACHE_DIR_RANKER = "/app/reranker_cache"
+        CACHE_DIR_RANKER = "/reranker_cache"
         ranker = Ranker(cache_dir=CACHE_DIR_RANKER)
         results = []
         processed_queries = set()
@@ -215,10 +216,10 @@ def index_and_rank(corpus: List[Document], query: str, top_percent: float = 20, 
 
     return final_results
 
-def run_hybrid_graph_retrieval(graph: Neo4jGraph = None, corpus: List[Document] = None, query: str = None, hybrid: bool = False):
+def run_hybrid_graph_retrieval(graph: Neo4jGraph = None, corpus: List[Document] = None, query: str = None, rag_mode: str = None):
     print(colored(f"\n\Initiating Retrieval...\n\n", "green"))
 
-    if hybrid:
+    if rag_mode == "Hybrid":
         print(colored("Running Hybrid Retrieval...", "yellow"))
         unstructured_data = index_and_rank(corpus, query)
 
@@ -231,12 +232,14 @@ def run_hybrid_graph_retrieval(graph: Neo4jGraph = None, corpus: List[Document] 
         response = graph.query(query)
         retrieved_context = f"Important Relationships:{response}\n\n Additional Context:{unstructured_data}"
 
-    else:
+    elif rag_mode == "Dense":
         print(colored("Running Dense Only Retrieval...", "yellow"))
-        unstructured_data = index_and_rank(corpus, query)
-        retrieved_context = f"Additional Context:{unstructured_data}"
+        retrieved_context_unformatted = index_and_rank(corpus, query)
+        # print(colored(f"\n\n DEBUG RETRIEVED CONTEXT UNFORMATTED: {retrieved_context_unformatted}\n\n TYPE: {type(retrieved_context_unformatted)}\n\n", "green"))
+        # retrieved_context = json.loads(retrieved_context_unformatted[0])
+        # retrieved_context = f"Additional Context:{unstructured_data}"
 
-    return retrieved_context
+    return retrieved_context_unformatted
 
 
 @timeout(20)  # Change: Takes url and query as input
@@ -267,7 +270,7 @@ def intelligent_chunking(url: str, query: str) -> List[Document]:
                     metadata={"source": url, "query": query} # Change: Added query to metadata
                 )
 
-                if len(document.page_content) > 30:
+                if len(document.page_content) > 0:
                     corpus.append(document)
             
             print(colored(f"Created corpus with {len(corpus)} documents", "green"))
@@ -380,8 +383,16 @@ def create_graph_index(
 
     return graph
 
+def process_retrieved_context(retrieved_context: List[Dict[str, Any]]) -> str:
+    output = ""
+    for idx, entry in enumerate(retrieved_context, start=1):
+        text = entry.get('text', '')
+        source = entry.get('meta', {'source': 'unknown'})
+        output += f"---\nEntry {idx}\nText:\n{text}\nSource:\n{source}\n\n"
+    return output
 
-def run_rag(urls: List[str], allowed_nodes: List[str] = None, allowed_relationships: List[str] = None, query: List[str] = None, hybrid: bool = False) -> List[Dict[str, str]]:
+
+def run_rag(urls: List[str], allowed_nodes: List[str] = None, allowed_relationships: List[str] = None, query: List[str] = None, rag_mode: str = None) -> List[Dict[str, str]]:
     # Change: adapted to take query and url as input.
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(urls), 5)) as executor:  
             futures = [executor.submit(intelligent_chunking, url, query) for url, query in zip(urls, query)]
@@ -393,21 +404,23 @@ def run_rag(urls: List[str], allowed_nodes: List[str] = None, allowed_relationsh
     print(colored(f"\n\nTotal documents in corpus after chunking: {len(corpus)}\n\n", "green"))
 
 
-    print(colored(f"\n\n DEBUG HYBRID VALUE: {hybrid}\n\n", "yellow"))
+    print(colored(f"\n\n DEBUG HYBRID VALUE: {rag_mode}\n\n", "yellow"))
     
-    if hybrid:
+    if rag_mode == "Hybrid":
         print(colored(f"\n\n Creating Graph Index...\n\n", "green"))
         graph = Neo4jGraph()
         clear_neo4j_database(graph)
         graph = create_graph_index(documents=corpus, allowed_nodes=allowed_nodes, allowed_relationships=allowed_relationships, query=query, graph=graph)
-    else:
+    elif rag_mode == "Dense":
         graph = None
 
-    retrieved_context = run_hybrid_graph_retrieval(graph=graph, corpus=corpus, query=query, hybrid=hybrid)
+    retrieved_context = run_hybrid_graph_retrieval(graph=graph, corpus=corpus, query=query, rag_mode=rag_mode)
+    
+    # print(colored(f"\n\n DEBUG RETRIEVED CONTEXT: {retrieved_context}\n\n TYPE: {type(retrieved_context)}\n\n", "green"))
 
-    retrieved_context = str(retrieved_context)
+    processed_context = process_retrieved_context(retrieved_context)
 
-    return retrieved_context
+    return processed_context
 
 if __name__ == "__main__":
     # For testing purposes.
@@ -422,8 +435,8 @@ if __name__ == "__main__":
     query = ["Co-pilot Microsoft"]
     allowed_nodes = None
     allowed_relationships = None
-    hybrid = False
-    results = run_rag(urls, allowed_nodes=allowed_nodes, allowed_relationships=allowed_relationships, query=query, hybrid=hybrid)
+    rag_mode = "Hybrid"
+    results = run_rag(urls, allowed_nodes=allowed_nodes, allowed_relationships=allowed_relationships, query=query, rag_mode=rag_mode)
 
     print(colored(f"\n\n RESULTS: {results}", "green"))
 

@@ -27,7 +27,7 @@ load_config(config_path)
 server = os.environ.get("LLM_SERVER")
 recursion_limit = int(os.environ.get("RECURSION_LIMIT"))
 
-def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool = False) -> Dict[str, Any]:
+def get_agent_kwargs(server: str = "claude", location: str = None, rag_mode: str = "Non-RAG") -> Dict[str, Any]:
 
     if not location:
         location = "us"
@@ -88,7 +88,7 @@ def get_agent_kwargs(server: str = "claude", location: str = None, hybrid: bool 
 
     agent_kwargs_tools = agent_kwargs.copy()
     agent_kwargs_tools["location"] = location
-    agent_kwargs_tools["hybrid"] = hybrid
+    agent_kwargs_tools["rag_mode"] = rag_mode
 
     return agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert
 
@@ -150,14 +150,16 @@ async def update_settings(settings):
 
     retrieval_mode = settings["retrieval_mode"]
 
-    if retrieval_mode == "Hybrid (Graph + Dense)":
-        hybrid = True
-    else:
-        hybrid = False
+    if retrieval_mode == "rag_mode (Graph + Dense)":
+        rag_mode = "Hybrid"
+    elif retrieval_mode == "Dense Only":
+        rag_mode = "Dense"
+    elif retrieval_mode == "Non-RAG Search":
+        rag_mode = "Non-RAG"
 
-    cl.user_session.set("hybrid", hybrid)
+    cl.user_session.set("rag_mode", rag_mode)
 
-    agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert = get_agent_kwargs(server, gl, hybrid)
+    agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert = get_agent_kwargs(server, gl, rag_mode)
     cl.user_session.set("agent_kwargs", agent_kwargs)
     cl.user_session.set("agent_kwargs_tools", agent_kwargs_tools)
     cl.user_session.set("agent_kwargs_meta_expert", agent_kwargs_meta_expert)
@@ -219,7 +221,8 @@ async def start():
                     "The United Kingdom",
                     "The Netherlands",
                     "Canada",
-                ]
+                ],
+                initial_index=2,
             ), 
             Select(
                 id="retrieval_mode",
@@ -227,9 +230,10 @@ async def start():
                 values=[
                     "Hybrid (Graph + Dense)",
                     "Dense Only",
+                    "Non-RAG Search"
                 ],
-                initial_index=1,
-                description="The retrieval mode determines how Jar3d and searches and indexes information from the internet. Hybrid mode performs a deeper search but will cost more."
+                initial_index=2,
+                description="Hybrid: Slow but more comprehensive search. Dense: Faster but less comprehensive search. Non-RAG: Fastest, no retreival potentially expensive for large context."
             )
 
         ]
@@ -237,12 +241,12 @@ async def start():
 
     try:
         gl = cl.user_session.get("gl")
-        hybrid = cl.user_session.get("hybrid")
+        rag_mode = cl.user_session.get("rag_mode")
     except Exception as e:
         gl = "us"
-        hybrid = False
+        rag_mode = False
         
-    agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert = get_agent_kwargs(server, gl, hybrid)
+    agent_kwargs, agent_kwargs_tools, agent_kwargs_meta_expert = get_agent_kwargs(server, gl, rag_mode)
     cl.user_session.set("agent_kwargs", agent_kwargs)
     cl.user_session.set("agent_kwargs_tools", agent_kwargs_tools)
     cl.user_session.set("agent_kwargs_meta_expert", agent_kwargs_meta_expert)

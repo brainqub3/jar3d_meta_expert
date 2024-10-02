@@ -6,7 +6,7 @@ import os
 import logging
 from langsmith import Client
 from langsmith.run_helpers import traceable
-from typing import List, Dict, Any
+from typing import List, Dict
 from utils.logging import log_function, setup_logging
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 from config.load_configs import load_config
@@ -39,17 +39,9 @@ class BaseModel:
     #            )
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(1), retry=retry_if_exception_type(requests.RequestException))
     def _make_request(self, url, headers, payload):
-        response = requests.post(url, headers=headers, json=payload)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as http_err:
-            error_content = response.content.decode('utf-8')
-            print(f'HTTP error occurred: {http_err}\nResponse content: {error_content}')
-            raise
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        response.raise_for_status()
         return response.json()
-    
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
-        pass
     
 class MistralModel(BaseModel):
     def __init__(self, temperature: float, model: str, json_response: bool, max_retries: int = 3, retry_delay: int = 1):
@@ -71,7 +63,7 @@ class MistralModel(BaseModel):
         response.raise_for_status()
         return response.json()
 
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
+    def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
 
@@ -135,7 +127,7 @@ class ClaudeModel(BaseModel):
 
     # def invoke(self, messages: List[Dict[str, str]]) -> str:
     @traceable(run_type="llm", metadata={"ls_provider": 'anthropic', 'ls_model_name': 'claude-3-5-sonnet-20240620'})
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
+    def invoke(self, messages: List[Dict[str, str]]) -> str:
         # Extract system message if present
         system = next((msg["content"] for msg in messages if msg["role"] == "system"), None)
         
@@ -204,7 +196,7 @@ class GeminiModel(BaseModel):
         }
         self.model_endpoint = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={self.api_key}"
 
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
+    def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
 
@@ -276,7 +268,7 @@ class GroqModel(BaseModel):
         }
         self.model_endpoint = "https://api.groq.com/openai/v1/chat/completions"
 
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
+    def invoke(self, messages: List[Dict[str, str]]) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
 
@@ -349,7 +341,7 @@ class OllamaModel(BaseModel):
         else:
             print(f"Failed to pull model. Status code: {response.status_code}")
 
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
+    def invoke(self, messages: List[Dict[str, str]]) -> str:
         self._check_and_pull_model()  # Check and pull the model if necessary
 
         system = messages[0]["content"]
@@ -386,7 +378,7 @@ class VllmModel(BaseModel):
         self.model_endpoint = model_endpoint + 'v1/chat/completions'
         self.stop = stop
 
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
+    def invoke(self, messages: List[Dict[str, str]], guided_json: dict = None) -> str:
         system = messages[0]["content"]
         user = messages[1]["content"]
 
@@ -454,7 +446,7 @@ class OpenAIModel(BaseModel):
 
     # def invoke(self, messages: List[Dict[str, str]]) -> str:
     @traceable(run_type="llm", metadata={"ls_provider": 'openai', 'ls_model_name': 'gpt-4o'})
-    def invoke(self, messages: List[Dict[str, str]], guided_json: Dict[str, Any] = None) -> str:
+    def invoke(self, messages: List[Dict[str, str]]) -> str:
         # Extract system message if present
         system = next((msg["content"] for msg in messages if msg["role"] == "system"), None)
         
@@ -495,17 +487,7 @@ class OpenAIModel(BaseModel):
             payload["messages"].extend(api_messages)
         
         if self.json_response:
-            payload["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "open_ai_agent",
-                    "strict": True,
-                    "schema": guided_json
-                }
-            }
-
-        
-        #print(f"DEBUG PAYLOAD: {payload}")
+            payload["response_format"] = {"type": "json_object"}
         
         try:
             response_json = self._make_request(self.model_endpoint, self.headers, payload)

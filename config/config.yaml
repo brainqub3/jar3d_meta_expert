@@ -1,5 +1,5 @@
 # 1) Set your LLM_SERVER
-LLM_SERVER: claude
+LLM_SERVER: oepnai
 
 # 2)  Set your LLM API Keys - For Hyrbid Retreival You need to set Claude alongside your LLM_SERVER
 ANTHROPIC_API_KEY: 
@@ -20,4 +20,12 @@ NEO4J_USERNAME:
 NEO4J_PASSWORD: 
 
 # 6) Set the number of recursions for the MetaExpert
-RECURSION_LIMIT: 8
+#RECURSION_LIMIT: 8
+
+# Development Configs
+# For development purposes you can track with LangSmith
+LANGCHAIN_TRACING_V2: 'true'
+LANGCHAIN_ENDPOINT: https://api.smith.langchain.com
+LANGCHAIN_API_KEY: 
+LANGCHAIN_PROJECT: jar3d-dev
+
