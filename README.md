@@ -1,5 +1,7 @@
 ## Overview
 
+** Jar3d has had a complete overhaul, the neo4j feature has been removed and will be added back in a future release.**
+
 Jar3d is a Meta Agent built on LangGraph that can orchestrate a team of agents to complete basic tasks. 
 
 The agent team includes:
@@ -71,7 +73,7 @@ graph TD
 
 1. Git
 2. Docker and Docker Compose
-3. (Optional) Neo4j Aura account for Hybrid Retrieval
+
 
 ## Configuration
 

@@ -1,26 +1,18 @@
-# 1) Set your LLM_SERVER
-LLM_SERVER: oepnai
-
-# 2)  Set your LLM API Keys - For Hyrbid Retreival You need to set Claude alongside your LLM_SERVER
+# 1)  Set your LLM API Keys - For Hyrbid Retreival You need to set Claude alongside your LLM_SERVER
 ANTHROPIC_API_KEY: 
 GEMINI_API_KEY: 
 GROQ_API_KEY: 
 OPENAI_API_KEY: 
 MISTRAL_API_KEY: 
 
-# 3) Set your Serper DEV API Key
+# 2) Set your Serper DEV API Key
 SERPER_API_KEY: 
 
-# 4) LLM Document ingestion server
-# LLM_SHERPA_SERVER: http://localhost:5010/api/parseDocument?renderFormat=all&useNewIndentParser=yes
 
-# 5) For Hybrid Retrieval Mode Neo4j database Configs please visit https://neo4j.com/ to get started
+# 3) For Hybrid Retrieval Mode Neo4j database Configs please visit https://neo4j.com/ to get started
 NEO4J_URI: 
 NEO4J_USERNAME: 
 NEO4J_PASSWORD: 
-
-# 6) Set the number of recursions for the MetaExpert
-#RECURSION_LIMIT: 8
 
 # Development Configs
 # For development purposes you can track with LangSmith
