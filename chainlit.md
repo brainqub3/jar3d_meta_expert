@@ -31,7 +31,3 @@ Jar3d is particularly well-suited for tasks that require research and informatio
 - Analyzing consumer reviews
 
 Note: Jar3d has access to the Google search engine and Google Shopping for its research capabilities.
-
-## Additional Settings
-
-You can enhance Jar3d's search capabilities by setting the retrieval mode to Hybrid. This mode performs a more advanced search and retrieval than the default mode.
