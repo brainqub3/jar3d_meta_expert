@@ -1,8 +1,22 @@
 ## Overview
 
-** Jar3d has had a complete overhaul, the neo4j feature has been removed and will be added back in a future release.**
+> **Important Note**
+> 
+> Jar3d has undergone a complete overhaul. The neo4j feature has been temporarily removed and will be reintroduced in a future release.
 
-Jar3d is a Meta Agent built on LangGraph that can orchestrate a team of agents to complete basic tasks. 
+### Supported Servers and Models
+
+- **openai** (Recommended)
+  - Models:
+    - `gpt-4o-2024-08-06`
+    - `gpt-4o-mini-2024-07-18`
+
+- **anthropic**
+  - Supported, but not recommended for use
+
+### About Jar3d
+
+Jar3d is a Meta Agent built on LangGraph, designed to orchestrate a team of agents for completing basic tasks.
 
 The agent team includes:
 
@@ -12,6 +26,10 @@ The agent team includes:
 - RAG Agent
 
 **The agent team can be extended by adding additional tool using agents to the project.**
+
+> **Important Note**
+> 
+> If you are extending the agent team, you must have a `meta_agent` and a `reporter_agent` in the team.
 
 Jar3d can perform basic tasks like product sourcing, writing newsletters, creating itineraries, and essentially anything that can be reasonably done with the team of agents listed above.
 

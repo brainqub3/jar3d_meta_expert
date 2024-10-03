@@ -29,6 +29,11 @@ async def start():
 
     cl.user_session.set("conversation_history", [])
 
+    # IMPORTANT: Every Agent team must have a MetaAgent called "meta_agent" and a ReporterAgent called "reporter_agent".
+    # IMPORTANT: server names can be "openai" or "anthropic"
+    # IMPORTANT: for openai models use gpt-4o-2024-08-06 or gpt-4o-mini-2024-07-18
+
+    # Add new agents here:
     meta_agent = MetaAgent(
         name="meta_agent",
         server="openai",
@@ -60,7 +65,7 @@ async def start():
         temperature=0
     )
 
-    # Note reoorter agent does not call llms. 
+    # Note reporter agent does not call llms. 
     reporter_agent = ReporterAgent(
         name="reporter_agent",
         server="openai",
@@ -87,6 +92,7 @@ async def start():
 
     system_prompt = f"{system_prompt}\n\n Current time: {time.strftime('%Y-%m-%d %H:%M:%S')}"
 
+    # Add new agents to the session
     cl.user_session.set("system_prompt", system_prompt)
     cl.user_session.set("chat_model", chat_model)
     cl.user_session.set("meta_agent", meta_agent)
@@ -184,6 +190,7 @@ async def run_workflow(workflow, state, configs):
 @cl.on_message
 async def main(message: cl.Message):
     # Retrieve session variables
+    # Add new agents to the session
     meta_agent = cl.user_session.get("meta_agent")
     serper_agent = cl.user_session.get("serper_agent")
     web_scraper_agent = cl.user_session.get("web_scraper_agent")
@@ -201,6 +208,7 @@ async def main(message: cl.Message):
         # print(colored(f"\n\nDEBUG REPORTER AGENT WORK FEEDBACK: {previous_work}\n\n Type: {type(previous_work)}\n\n", 'red'))
         system_prompt = f"{system_prompt}\n\nLast message from the agent:\n<prev_work>{previous_work}</prev_work>"
 
+    # Add new agents to the agent_team
     agent_team = [meta_agent, serper_agent, serper_shopping_agent, web_scraper_agent, offline_rag_websearch_agent, reporter_agent]
     # agent_team = [meta_agent, serper_agent, offline_rag_websearch_agent, reporter_agent]
     configs = {"recursion_limit": 50, "configurable": {"thread_id": 42}}

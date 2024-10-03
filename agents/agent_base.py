@@ -251,12 +251,12 @@ class MetaAgent(BaseAgent[StateT]):
 
     def read_instructions(self, state: StateT) -> str:
         """
-        Read instructions from the 'meta_prompt.MD' file in the 'prompt_engineering' folder.
+        Read instructions from the 'meta_prompt.md' file in the 'prompt_engineering' folder.
 
         :param state: The current state of the agent.
         :return: Instructions as a string.
         """
-        # Construct the path to the meta_prompt.MD file
+        # Construct the path to the meta_prompt.md file
         prompt_path = os.path.join(
             os.path.dirname(__file__), '..', 'prompt_engineering', 'meta_prompt.md'
         )
@@ -273,7 +273,7 @@ class MetaAgent(BaseAgent[StateT]):
             
     def get_guided_json(self, state: StateT) -> Dict[str, Any]:
         """
-        Get guided JSON schema for response generation, aligning with meta_prompt.MD.
+        Get guided JSON schema for response generation, aligning with meta_prompt.md.
 
         :param state: The current state of the agent.
         :return: Guided JSON schema as a dictionary.
@@ -286,15 +286,15 @@ class MetaAgent(BaseAgent[StateT]):
                     "properties": {
                         "workpad_summary": {
                             "type": "string",
-                            "description": "Extractively summarize information you have in the workpad including the relevant URL sources (from the workpad if available) as they relate to the requirements."
+                            "description": "Extractively summarize information you have in the workpad, including the relevant sources as they relate to the requirements."
                         },
                         "reasoning_steps": {
                             "type": "string",
-                            "description": "Based on the workpad_summary and the agents available to you, outline your reasoning steps for solving the requirements."
+                            "description": "Based on the workpad summary and the agents available to you, outline your reasoning steps for solving the requirements."
                         },
                         "work_completion": {
                             "type": "string",
-                            "description": "Based on the workpad, determine if you have enough information to provide a response to the user's requirements."
+                            "description": "Based on the workpad, determine if you have enough information to provide Type_2 work."
                         }
                     },
                     "required": ["workpad_summary", "reasoning_steps", "work_completion"],
@@ -319,18 +319,18 @@ class MetaAgent(BaseAgent[StateT]):
                 },
                 "Agent": {
                     "type": "string",
-                    "description": "Carefully select the agent to instruct from the agent register; ensure you provide the agent name exactly as it appears on the register."
+                    "description": "Carefully select the agent to instruct from the Agent Register; ensure you provide the agent name exactly as it appears on the register."
                 },
                 "step_3": {
                     "type": "object",
                     "properties": {
                         "draft_instructions": {
                             "type": "string",
-                            "description": "Provide draft instructions to your Agent or a final response to the user's requirements based on the reasoning."
+                            "description": "Provide draft Type_1 or Type_2 work based on the workpad; use the workpad summary and reasoning steps to inform your response."
                         },
                         "review": {
                             "type": "string",
-                            "description": "Review the draft instructions."
+                            "description": "Review the draft."
                         }
                     },
                     "required": ["draft_instructions", "review"],
@@ -342,11 +342,11 @@ class MetaAgent(BaseAgent[StateT]):
                     "properties": {
                         "agent_alignment": {
                             "type": "string",
-                            "description": "Check that your instructions or response align with the agent's capabilities."
+                            "description": "Check that your draft aligns with the agent's capabilities."
                         },
                         "final_draft": {
                             "type": "string",
-                            "description": "Provide a final set of instructions for the agent to work with or a final response to the user's requirements if you have enough information."
+                            "description": "Provide a final draft of your Type_1 or Type_2 work."
                         }
                     },
                     "required": ["agent_alignment", "final_draft"],
