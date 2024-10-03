@@ -126,7 +126,7 @@ Setup the configurations for the project in the `config/config.yaml` file.
    ```bash
    docker-compose up --build
    ```
-3. Access Jar3d web interface at `http://localhost:8000`.
+3. Access Jar3d web interface at `http://localhost:8105`.
 
 To stop the service:
 ```bash
